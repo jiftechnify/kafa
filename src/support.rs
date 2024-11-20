@@ -55,12 +55,11 @@ impl ByteSeq {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::io::Cursor;
 
     #[test]
     fn test_byte_seq() {
-        let mut bin = Cursor::new(vec![255u8, 1, 0, 0, 1, 0, 0, 0]);
-        let mut bs = ByteSeq::new(&mut bin).unwrap();
+        let bin = vec![255u8, 1, 0, 0, 1, 0, 0, 0];
+        let mut bs = ByteSeq::new(bin.as_slice()).unwrap();
 
         assert_eq!(bs.pos(), 0);
 

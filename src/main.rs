@@ -1,15 +1,18 @@
-use std::io::Cursor;
-
 mod class_file;
 mod support;
 
 use class_file::ClassFile;
+use std::fs::File;
 
 fn main() {
-    let mut input = Cursor::new(vec![202u8, 254, 186, 190, 0, 0, 0, 0]);
-
-    match ClassFile::parse(&mut input) {
-        Ok(class_file) => println!("parsed class file: {:?}", class_file),
+    let mut file = File::open("res/MakeJVM.class").expect("failed to open class file");
+    match ClassFile::parse(&mut file) {
+        Ok(class_file) => {
+            println!("methods:");
+            for m in class_file.methods {
+                println!("- {}", m);
+            }
+        }
         Err(e) => println!("failed to parse: {}", e),
     }
 }

@@ -1,9 +1,18 @@
-use std::io::Read;
+use std::{fmt::Display, io::Read};
 
 use crate::support::ByteSeq;
 
+mod attr;
+mod const_pool;
+
+use attr::{parse_attributes, Attribute};
+use const_pool::ConstantPool;
+
 #[derive(Debug)]
-pub struct ClassFile;
+pub struct ClassFile {
+    constant_pool: ConstantPool,
+    pub methods: Vec<MethodInfo>,
+}
 
 impl ClassFile {
     const MAGIC_NUMBER: u32 = 0xCAFEBABE;
@@ -20,6 +29,85 @@ impl ClassFile {
         // skip major and minor version
         bs.skip(4);
 
-        Ok(ClassFile)
+        // parse constant pool
+        let cp = ConstantPool::parse(&mut bs)?;
+
+        // skip access_flags, this_class, super_class
+        bs.skip(6);
+        // skip interfaces
+        let ifaces_count = bs.read_u16() as usize;
+        bs.skip(2 * ifaces_count);
+
+        // skip fields
+        let _ = parse_fields(&mut bs, &cp);
+
+        // parse methods
+        let methods = parse_methods(&mut bs, &cp);
+
+        // skip attributes
+
+        Ok(ClassFile {
+            constant_pool: cp,
+            methods,
+        })
+    }
+}
+
+#[allow(unused)]
+#[derive(Debug)]
+struct FieldInfo {
+    access_flags: u16,
+    name: String,
+    descriptor: String,
+    attributes: Vec<Attribute>,
+}
+
+fn parse_fields(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<FieldInfo> {
+    let count = bs.read_u16() as usize;
+    let mut vec = Vec::with_capacity(count);
+    for _ in 0..count {
+        vec.push(parse_field_info(bs, cp));
+    }
+    vec
+}
+
+fn parse_field_info(bs: &mut ByteSeq, cp: &ConstantPool) -> FieldInfo {
+    FieldInfo {
+        access_flags: bs.read_u16(),
+        name: cp.get_utf8(bs.read_u16()).to_string(),
+        descriptor: cp.get_utf8(bs.read_u16()).to_string(),
+        attributes: parse_attributes(bs, cp),
+    }
+}
+
+#[derive(Debug)]
+pub struct MethodInfo {
+    access_flags: u16,
+    name: String,
+    descriptor: String,
+    attributes: Vec<Attribute>,
+}
+
+fn parse_methods(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<MethodInfo> {
+    let count = bs.read_u16() as usize;
+    let mut vec = Vec::with_capacity(count);
+    for _ in 0..count {
+        vec.push(parse_method_info(bs, cp));
+    }
+    vec
+}
+
+fn parse_method_info(bs: &mut ByteSeq, cp: &ConstantPool) -> MethodInfo {
+    MethodInfo {
+        access_flags: bs.read_u16(),
+        name: cp.get_utf8(bs.read_u16()).to_string(),
+        descriptor: cp.get_utf8(bs.read_u16()).to_string(),
+        attributes: parse_attributes(bs, cp),
+    }
+}
+
+impl Display for MethodInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.name, self.descriptor)
     }
 }
