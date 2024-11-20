@@ -5,7 +5,7 @@ use crate::support::ByteSeq;
 mod attr;
 mod const_pool;
 
-use attr::{parse_attributes, Attribute};
+use attr::{parse_attributes, Attribute, CodeAttr};
 use const_pool::ConstantPool;
 
 #[derive(Debug)]
@@ -88,6 +88,27 @@ pub struct MethodInfo {
     attributes: Vec<Attribute>,
 }
 
+impl MethodInfo {
+    pub fn get_code_attr(&self) -> Option<&CodeAttr> {
+        for attr in self.attributes.iter() {
+            if let Attribute::Code(code_attr) = attr {
+                return Some(code_attr);
+            }
+        }
+        None
+    }
+
+    pub fn num_args(&self) -> usize {
+        self.descriptor[1..].find(')').expect("malformed signature")
+    }
+}
+
+impl Display for MethodInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}{}", self.name, self.descriptor)
+    }
+}
+
 fn parse_methods(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<MethodInfo> {
     let count = bs.read_u16() as usize;
     let mut vec = Vec::with_capacity(count);
@@ -106,8 +127,22 @@ fn parse_method_info(bs: &mut ByteSeq, cp: &ConstantPool) -> MethodInfo {
     }
 }
 
-impl Display for MethodInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.name, self.descriptor)
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_method_info_num_args() {
+        let tests = vec![("()V", 0), ("(I)V", 1), ("(ISB)V", 3)];
+
+        for (input, exp) in tests {
+            let m = MethodInfo {
+                access_flags: 0,
+                name: "".to_string(),
+                descriptor: input.to_string(),
+                attributes: vec![],
+            };
+            assert_eq!(m.num_args(), exp);
+        }
     }
 }

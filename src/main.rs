@@ -1,5 +1,6 @@
 mod class_file;
 mod support;
+mod vm;
 
 use class_file::ClassFile;
 use std::fs::File;

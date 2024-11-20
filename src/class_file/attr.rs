@@ -33,10 +33,10 @@ pub fn parse_attributes(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<Attribute> {
 }
 
 #[derive(Debug)]
-struct CodeAttr {
-    max_stack: u16,
-    max_locals: u16,
-    code: Vec<u8>,
+pub struct CodeAttr {
+    pub max_stack: u16,
+    pub max_locals: u16,
+    pub code: Vec<u8>,
 }
 
 impl CodeAttr {
