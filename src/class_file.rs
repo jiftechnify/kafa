@@ -43,10 +43,7 @@ impl ClassFile {
 
         // skip attributes
 
-        Ok(ClassFile {
-            // constant_pool: cp,
-            methods,
-        })
+        Ok(ClassFile { methods })
     }
 }
 
