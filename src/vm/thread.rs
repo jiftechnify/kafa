@@ -22,9 +22,11 @@ impl Thread {
     }
 
     fn exec_method(&mut self, method: &MethodInfo) -> Result<(), String> {
-        let caller_frame = self.current_frame().expect("caller should be exist");
-        let mut callee_frame = Frame::new(method);
-        callee_frame.set_locals(&caller_frame.pop_operands(method.num_args()));
+        let caller = self.current_frame().expect("caller should be exist");
+
+        // create frame for callee method, and pass arguments from caller's stack
+        let mut callee = Frame::new(method);
+        Frame::transfer_args(caller, &mut callee, method.num_args());
 
         // TODO: execute instructions
 

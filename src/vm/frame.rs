@@ -12,12 +12,12 @@ impl Frame {
         let code_attr = method.get_code_attr().expect("method must have code attr");
         let code_reader = ByteSeq::new(code_attr.code.as_slice()).unwrap();
 
-        return Frame {
+        Frame {
             locals: vec![0i32; code_attr.max_locals as usize],
             op_stack: Vec::new(),
             code: code_reader,
             pc: 0,
-        };
+        }
     }
 }
 
@@ -25,13 +25,6 @@ impl Frame {
     /*  ローカル変数領域操作 */
     fn set_local(&mut self, idx: usize, v: i32) -> &mut Self {
         self.locals[idx] = v;
-        self
-    }
-
-    pub fn set_locals(&mut self, vs: &[i32]) -> &mut Self {
-        for (i, v) in vs.into_iter().enumerate() {
-            self.locals[i] = *v;
-        }
         self
     }
 
@@ -72,12 +65,21 @@ impl Frame {
         self.op_stack.pop().expect("stack underflow")
     }
 
-    pub fn pop_operands(&mut self, n: usize) -> Vec<i32> {
-        let mut res = Vec::new();
-        for _ in 0..n {
-            res.push(self.pop_operand())
+    // 呼び出すメソッドにn個の引数を渡す処理
+    // 呼び出し元フレームのスタックトップからn個ぶんの値を、呼び出し先フレームのローカル変数の先頭n個ぶんの値としてセット
+    //
+    // caller stack:    ..., arg1, arg2, ... , argN (stack top)
+    //                         ↓     ↓           ↓
+    // callee locals: (head) prm1, prm2, ... , prmN, ...
+    pub fn transfer_args(caller: &mut Self, callee: &mut Self, n: usize) {
+        for i in (0..n).rev() {
+            callee.set_local(i, caller.pop_operand());
         }
-        res.reverse();
-        res
+    }
+
+    // メソッドの返り値を呼び出し元に返す処理
+    // 呼び出されたメソッドのフレームのスタックからpopし、呼び出し元フレームのスタックにpush
+    pub fn transfer_ret(caller: &mut Self, callee: &mut Self) {
+        caller.push_operand(callee.pop_operand());
     }
 }
