@@ -5,31 +5,37 @@ type Instruction = fn(&mut Thread) -> InstructionResult;
 
 pub fn exec_instr(thread: &mut Thread) -> InstructionResult {
     let op_code = thread.current_frame().next_instruction();
-    let instr = dispatch(op_code)
+    let instr = INSTRUCTION_TABLE[op_code as usize]
         .ok_or_else(|| format!("op(code = {:#x}) has been not implemented", op_code))?;
 
     instr(thread)
 }
 
-fn dispatch(op_code: u8) -> Option<Instruction> {
-    let instr = match op_code {
-        0x00 => instr_nop,
-        0x03 => instr_iconst::<0>,
-        0x04 => instr_iconst::<1>,
-        0x1A => instr_iload::<0>,
-        0x1B => instr_iload::<1>,
-        0x1C => instr_iload::<2>,
-        0x3C => instr_istore::<1>,
-        0x3D => instr_istore::<2>,
-        0x60 => instr_iadd,
-        0x84 => instr_iinc,
-        0xA3 => instr_if_icmpgt,
-        0xA7 => instr_goto,
-        0xAC => instr_ireturn,
-        _ => return None,
+macro_rules! instruction_table {
+    ($($op_code:expr => $instr_impl:expr$(,)?),*) => {
+        {
+            let mut table: [Option<Instruction>; 256] = [None; 256];
+            $(table[$op_code] = Some($instr_impl);)*
+            table
+        }
     };
-    Some(instr)
 }
+
+const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
+    0x00 => instr_nop,
+    0x03 => instr_iconst::<0>,
+    0x04 => instr_iconst::<1>,
+    0x1A => instr_iload::<0>,
+    0x1B => instr_iload::<1>,
+    0x1C => instr_iload::<2>,
+    0x3C => instr_istore::<1>,
+    0x3D => instr_istore::<2>,
+    0x60 => instr_iadd,
+    0x84 => instr_iinc,
+    0xA3 => instr_if_icmpgt,
+    0xA7 => instr_goto,
+    0xAC => instr_ireturn,
+};
 
 // no-op
 fn instr_nop(_: &mut Thread) -> InstructionResult {
