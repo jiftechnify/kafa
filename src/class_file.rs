@@ -10,16 +10,13 @@ use const_pool::ConstantPool;
 
 #[derive(Debug)]
 pub struct ClassFile {
-    constant_pool: ConstantPool,
     pub methods: Vec<MethodInfo>,
 }
 
 impl ClassFile {
     const MAGIC_NUMBER: u32 = 0xCAFEBABE;
 
-    pub fn parse<R: Read>(
-        input: &mut R,
-    ) -> Result<ClassFile, Box<dyn std::error::Error + 'static>> {
+    pub fn parse<R: Read>(input: R) -> Result<ClassFile, Box<dyn std::error::Error + 'static>> {
         let mut bs = ByteSeq::new(input)?;
 
         // Check if it starts with magic number
@@ -47,9 +44,18 @@ impl ClassFile {
         // skip attributes
 
         Ok(ClassFile {
-            constant_pool: cp,
+            // constant_pool: cp,
             methods,
         })
+    }
+}
+
+impl ClassFile {
+    // lookup the method by the name and the signature(descriptor)
+    pub fn find_method(&self, name: &str, desc: &str) -> Option<&MethodInfo> {
+        self.methods
+            .iter()
+            .find(|m| m.name == name && m.descriptor == desc)
     }
 }
 

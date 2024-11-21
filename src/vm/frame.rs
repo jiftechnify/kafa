@@ -19,49 +19,58 @@ impl Frame {
             pc: 0,
         }
     }
+
+    pub fn new_empty() -> Frame {
+        Frame {
+            locals: Vec::new(),
+            op_stack: Vec::new(),
+            code: ByteSeq::new(vec![].as_slice()).unwrap(),
+            pc: 0,
+        }
+    }
 }
 
 impl Frame {
     /*  ローカル変数領域操作 */
-    fn set_local(&mut self, idx: usize, v: i32) -> &mut Self {
+    pub fn set_local(&mut self, idx: usize, v: i32) -> &mut Self {
         self.locals[idx] = v;
         self
     }
 
-    fn get_locals(&self) -> &[i32] {
-        &self.locals
+    pub fn get_local(&self, idx: usize) -> i32 {
+        self.locals[idx]
     }
 
     /* 命令デコード */
-    fn next_instruction(&mut self) -> u8 {
+    pub fn next_instruction(&mut self) -> u8 {
         self.pc = self.code.pos() as u16;
         self.code.read_u8()
     }
 
-    fn next_param_u8(&mut self) -> u8 {
+    pub fn next_param_u8(&mut self) -> u8 {
         self.code.read_u8()
     }
 
-    fn next_param_u16(&mut self) -> u16 {
+    pub fn next_param_u16(&mut self) -> u16 {
         self.code.read_u16()
     }
 
     /* プログラムカウンタ操作 */
-    fn get_pc(&self) -> u16 {
+    pub fn get_pc(&self) -> u16 {
         self.pc
     }
 
-    fn jump_pc(&mut self, pc: u16) {
+    pub fn jump_pc(&mut self, pc: u16) {
         self.pc = pc;
         self.code.seek(pc as usize);
     }
 
     /* オペランドスタック操作 */
-    fn push_operand(&mut self, v: i32) {
+    pub fn push_operand(&mut self, v: i32) {
         self.op_stack.push(v)
     }
 
-    fn pop_operand(&mut self) -> i32 {
+    pub fn pop_operand(&mut self) -> i32 {
         self.op_stack.pop().expect("stack underflow")
     }
 
@@ -75,11 +84,5 @@ impl Frame {
         for i in (0..n).rev() {
             callee.set_local(i, caller.pop_operand());
         }
-    }
-
-    // メソッドの返り値を呼び出し元に返す処理
-    // 呼び出されたメソッドのフレームのスタックからpopし、呼び出し元フレームのスタックにpush
-    pub fn transfer_ret(caller: &mut Self, callee: &mut Self) {
-        caller.push_operand(callee.pop_operand());
     }
 }

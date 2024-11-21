@@ -1,35 +1,50 @@
 use crate::{class_file::MethodInfo, vm::frame::Frame};
 
+use super::instruction::exec_instr;
+
 pub struct Thread {
     frames: Vec<Frame>,
 }
 
 impl Thread {
-    fn new() -> Thread {
+    pub fn new() -> Thread {
         Thread { frames: Vec::new() }
     }
 
-    fn push_frame(&mut self, frame: Frame) {
+    pub fn push_frame(&mut self, frame: Frame) {
         self.frames.push(frame);
     }
 
-    fn pop_frame(&mut self) {
+    pub fn pop_frame(&mut self) {
         let _ = self.frames.pop().expect("thread frame stack underflow");
     }
 
-    fn current_frame(&mut self) -> Option<&mut Frame> {
-        self.frames.last_mut()
+    pub fn current_frame(&mut self) -> &mut Frame {
+        self.frames
+            .last_mut()
+            .expect("no frame belongs to the thread")
     }
 
-    fn exec_method(&mut self, method: &MethodInfo) -> Result<(), String> {
-        let caller = self.current_frame().expect("caller should be exist");
+    pub fn exec_method(&mut self, method: &MethodInfo) -> Result<(), Box<dyn std::error::Error>> {
+        let caller = self.current_frame();
+        let caller_addr = caller as *const Frame as usize;
 
         // create frame for callee method, and pass arguments from caller's stack
         let mut callee = Frame::new(method);
         Frame::transfer_args(caller, &mut callee, method.num_args());
 
-        // TODO: execute instructions
+        // switch to the callee frame
+        self.push_frame(callee);
 
+        // execute instructions until return
+        loop {
+            // check if returned from the method called
+            let curr_frame_addr = self.current_frame() as *const Frame as usize;
+            if caller_addr == curr_frame_addr {
+                break;
+            }
+            exec_instr(self)?;
+        }
         Ok(())
     }
 }

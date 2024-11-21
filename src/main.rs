@@ -1,19 +1,20 @@
+#![allow(dead_code)]
+
 mod class_file;
 mod support;
 mod vm;
 
-use class_file::ClassFile;
-use std::fs::File;
+use vm::VM;
 
 fn main() {
-    let mut file = File::open("res/MakeJVM.class").expect("failed to open class file");
-    match ClassFile::parse(&mut file) {
-        Ok(class_file) => {
-            println!("methods:");
-            for m in class_file.methods {
-                println!("- {}", m);
-            }
+    let mut vm = VM::new();
+    let res = vm.execute("res/MakeJVM.class", "compute", "(I)I", &[10]);
+    match res {
+        Ok(v) => {
+            println!("return value: {v}");
         }
-        Err(e) => println!("failed to parse: {}", e),
+        Err(e) => {
+            println!("failed to execute: {e}");
+        }
     }
 }
