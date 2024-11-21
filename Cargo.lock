@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "rustjvm"
+name = "kafa"
 version = "0.1.0"
