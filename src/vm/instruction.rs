@@ -24,8 +24,24 @@ macro_rules! instruction_table {
 
 const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x00 => instr_nop,
+
+    0x02 => instr_iconst::<-1>,
     0x03 => instr_iconst::<0>,
     0x04 => instr_iconst::<1>,
+    0x05 => instr_iconst::<2>,
+    0x06 => instr_iconst::<3>,
+    0x07 => instr_iconst::<4>,
+    0x08 => instr_iconst::<5>,
+    0x09 => instr_lconst::<0>,
+    0x10 => instr_lconst::<1>,
+    0x11 => instr_fconst_0,
+    0x12 => instr_fconst_1,
+    0x13 => instr_fconst_2,
+    0x14 => instr_dconst_0,
+    0x15 => instr_dconst_1,
+    0x16 => instr_bipush,
+    0x17 => instr_sipush,
+
     0x1A => instr_iload::<0>,
     0x1B => instr_iload::<1>,
     0x1C => instr_iload::<2>,
@@ -43,9 +59,56 @@ fn instr_nop(_: &mut Thread) -> InstructionResult {
     Ok(())
 }
 
-// push the constant N to the operand stack
+// push the constant N to the operand stack (int)
 fn instr_iconst<const N: i32>(t: &mut Thread) -> InstructionResult {
     t.current_frame().push_operand(Value::Int(N));
+    Ok(())
+}
+
+// push the constant N to the operand stack (long)
+fn instr_lconst<const N: i64>(t: &mut Thread) -> InstructionResult {
+    t.current_frame().push_operand(Value::Long(N));
+    Ok(())
+}
+
+// push the constant N to the operand stack (float)
+macro_rules! instr_fconst {
+    ($name:ident, $value:expr) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            t.current_frame().push_operand(Value::Float($value));
+            Ok(())
+        }
+    };
+}
+instr_fconst!(instr_fconst_0, 0.0);
+instr_fconst!(instr_fconst_1, 1.0);
+instr_fconst!(instr_fconst_2, 2.0);
+
+// push the constant N to the operand stack (double)
+macro_rules! instr_dconst {
+    ($name:ident, $value:expr) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            t.current_frame().push_operand(Value::Double($value));
+            Ok(())
+        }
+    };
+}
+instr_dconst!(instr_dconst_0, 0.0);
+instr_dconst!(instr_dconst_1, 1.0);
+
+// push immediate byte to the operand stack (byte is sign-extended to an int value)
+fn instr_bipush(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    let v = frame.next_param_u8() as i8 as i32;
+    frame.push_operand(Value::Int(v));
+    Ok(())
+}
+
+// push immediate short to the operand stack (short is sign-extended to an int value)
+fn instr_sipush(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    let v = frame.next_param_u16() as i16 as i32;
+    frame.push_operand(Value::Int(v));
     Ok(())
 }
 
