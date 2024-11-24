@@ -1,4 +1,5 @@
 use super::thread::Thread;
+use super::value::Value;
 
 type InstructionResult = Result<(), Box<dyn std::error::Error>>;
 type Instruction = fn(&mut Thread) -> InstructionResult;
@@ -44,7 +45,7 @@ fn instr_nop(_: &mut Thread) -> InstructionResult {
 
 // push the constant N to the operand stack
 fn instr_iconst<const N: i32>(t: &mut Thread) -> InstructionResult {
-    t.current_frame().push_operand(N);
+    t.current_frame().push_operand(Value::Int(N));
     Ok(())
 }
 
@@ -66,8 +67,13 @@ fn instr_istore<const N: usize>(t: &mut Thread) -> InstructionResult {
 // pop 2 values, add them and push the result
 fn instr_iadd(t: &mut Thread) -> InstructionResult {
     let frame = t.current_frame();
-    let (v2, v1) = (frame.pop_operand(), frame.pop_operand());
-    frame.push_operand(v1 + v2);
+    let Value::Int(rhs) = frame.pop_operand() else {
+        return Err("target operand is not type 'int'".into());
+    };
+    let Value::Int(lhs) = frame.pop_operand() else {
+        return Err("target operand is not type 'int'".into());
+    };
+    frame.push_operand(Value::Int(lhs + rhs));
     Ok(())
 }
 
@@ -79,8 +85,10 @@ fn instr_iinc(t: &mut Thread) -> InstructionResult {
 
     let idx = frame.next_param_u8() as usize;
     let delta = frame.next_param_u8() as i8 as i32;
-    let v = frame.get_local(idx) + delta;
-    frame.set_local(idx, v);
+    let Value::Int(v) = frame.get_local(idx) else {
+        return Err("target local is not type 'int'".into());
+    };
+    frame.set_local(idx, Value::Int(v + delta));
     Ok(())
 }
 
@@ -92,7 +100,12 @@ fn instr_if_icmpgt(t: &mut Thread) -> InstructionResult {
     let frame = t.current_frame();
 
     let pc_delta = frame.next_param_u16() as i16;
-    let (rhs, lhs) = (frame.pop_operand(), frame.pop_operand());
+    let Value::Int(rhs) = frame.pop_operand() else {
+        return Err("target operand is not type 'int'".into());
+    };
+    let Value::Int(lhs) = frame.pop_operand() else {
+        return Err("target operand is not type 'int'".into());
+    };
     if lhs > rhs {
         let jmp_dest = (frame.get_pc() as i16 + pc_delta) as u16;
         frame.jump_pc(jmp_dest);

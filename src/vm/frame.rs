@@ -1,8 +1,9 @@
+use super::value::Value;
 use crate::{class_file::MethodInfo, support::ByteSeq};
 
 pub struct Frame {
-    locals: Vec<i32>,
-    op_stack: Vec<i32>,
+    locals: Vec<Option<Value>>,
+    op_stack: Vec<Value>,
     code: ByteSeq,
     pc: u16,
 }
@@ -13,8 +14,8 @@ impl Frame {
         let code_reader = ByteSeq::new(code_attr.code.as_slice()).unwrap();
 
         Frame {
-            locals: vec![0i32; code_attr.max_locals as usize],
-            op_stack: Vec::new(),
+            locals: vec![Option::default(); code_attr.max_locals as usize],
+            op_stack: Vec::with_capacity(code_attr.max_stack as usize),
             code: code_reader,
             pc: 0,
         }
@@ -32,13 +33,21 @@ impl Frame {
 
 impl Frame {
     /*  ローカル変数領域操作 */
-    pub fn set_local(&mut self, idx: usize, v: i32) -> &mut Self {
-        self.locals[idx] = v;
+    pub fn set_local(&mut self, idx: usize, v: Value) -> &mut Self {
+        self.locals[idx] = Some(v);
         self
     }
 
-    pub fn get_local(&self, idx: usize) -> i32 {
-        self.locals[idx]
+    fn set_locals(&mut self, idx: usize, vs: &[Option<Value>]) {
+        self.locals[idx..(vs.len() + idx)].copy_from_slice(vs);
+    }
+
+    pub fn get_local(&self, idx: usize) -> Value {
+        self.locals[idx].expect("local not exist")
+    }
+
+    fn get_locals(&self) -> &[Option<Value>] {
+        &self.locals
     }
 
     /* 命令デコード */
@@ -66,11 +75,11 @@ impl Frame {
     }
 
     /* オペランドスタック操作 */
-    pub fn push_operand(&mut self, v: i32) {
+    pub fn push_operand(&mut self, v: Value) {
         self.op_stack.push(v)
     }
 
-    pub fn pop_operand(&mut self) -> i32 {
+    pub fn pop_operand(&mut self) -> Value {
         self.op_stack.pop().expect("stack underflow")
     }
 
@@ -81,8 +90,54 @@ impl Frame {
     //                         ↓     ↓           ↓
     // callee locals: (head) prm1, prm2, ... , prmN, ...
     pub fn transfer_args(caller: &mut Self, callee: &mut Self, n: usize) {
-        for i in (0..n).rev() {
-            callee.set_local(i, caller.pop_operand());
+        let mut locals_rev: Vec<Option<Value>> = Vec::new();
+        for _ in (0..n).rev() {
+            let arg = caller.pop_operand();
+            match arg {
+                // JVMの仕様上、Long/Doubleは連続する2スロットを消費
+                // この実装では、1スロット目に実際の値を入れ、2スロット目は空にする
+                Value::Long(_) | Value::Double(_) => {
+                    locals_rev.push(None);
+                    locals_rev.push(Some(arg));
+                }
+                _ => locals_rev.push(Some(arg)),
+            }
         }
+        callee.set_locals(
+            0,
+            locals_rev.into_iter().rev().collect::<Vec<_>>().as_slice(),
+        );
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_transfer_args() {
+        use Value::*;
+
+        let mut caller = Frame::new_empty();
+        let mut callee = Frame::new_empty();
+
+        caller.push_operand(Int(1));
+        caller.push_operand(Long(1));
+        caller.push_operand(Float(1.0));
+        caller.push_operand(Double(1.0));
+
+        Frame::transfer_args(&mut caller, &mut callee, 4);
+
+        assert_eq!(
+            callee.get_locals(),
+            &vec![
+                Some(Int(1)),
+                Some(Long(1)),
+                None,
+                Some(Float(1.0)),
+                Some(Double(1.0)),
+                None,
+            ]
+        )
     }
 }

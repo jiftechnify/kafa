@@ -56,7 +56,6 @@ impl ClassFile {
     }
 }
 
-#[allow(unused)]
 #[derive(Debug)]
 struct FieldInfo {
     access_flags: u16,

@@ -8,6 +8,9 @@ use crate::class_file::ClassFile;
 mod frame;
 mod instruction;
 mod thread;
+mod value;
+
+pub use value::Value;
 
 pub struct VM {
     thread: Thread,
@@ -25,8 +28,8 @@ impl VM {
         class_file_path: P,
         method_name: &str,
         method_desc: &str,
-        args: &[i32],
-    ) -> Result<i32, Box<dyn std::error::Error>>
+        args: &[Value],
+    ) -> Result<Value, Box<dyn std::error::Error>>
     where
         P: AsRef<Path>,
     {
