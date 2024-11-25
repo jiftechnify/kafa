@@ -33,8 +33,15 @@ impl ConstantPool {
 #[derive(Debug)]
 enum CPInfo {
     Utf8(String),
+    Integer(i32),
+    Float(f32),
+    Long(i64),
+    Double(f64),
     Class {
         name_idx: u16,
+    },
+    String {
+        string_idx: u16,
     },
     Methodref {
         class_idx: u16,
@@ -56,9 +63,33 @@ fn parse_cp_info(bs: &mut ByteSeq) -> Result<CPInfo, Box<dyn std::error::Error +
             let s = bs.read_bytes(len);
             CPInfo::Utf8(String::from_utf8(s)?)
         }
+        // CONSTANT_Integer
+        3 => {
+            let n = bs.read_u32();
+            CPInfo::Integer(n as i32)
+        }
+        // CONSTANT_Float
+        4 => {
+            let n = bs.read_u32();
+            CPInfo::Float(f32::from_bits(n))
+        }
+        // CONSTANT_Long
+        5 => {
+            let n = bs.read_u64();
+            CPInfo::Long(n as i64)
+        }
+        // CONSTANT_Double
+        6 => {
+            let n = bs.read_u64();
+            CPInfo::Double(f64::from_bits(n))
+        }
         // CONSTANT_Class
         7 => CPInfo::Class {
             name_idx: bs.read_u16(),
+        },
+        // CONSTANT_String
+        8 => CPInfo::String {
+            string_idx: bs.read_u16(),
         },
         // CONSTANT_Methodref
         10 => CPInfo::Methodref {

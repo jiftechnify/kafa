@@ -44,6 +44,12 @@ impl ByteSeq {
         n
     }
 
+    pub fn read_u64(&mut self) -> u64 {
+        let n = u64::from_be_bytes(self.buf[self.i..self.i + 8].try_into().unwrap());
+        self.i += 8;
+        n
+    }
+
     pub fn read_bytes(&mut self, n: usize) -> Vec<u8> {
         let i = self.i;
         let bytes = self.buf[i..i + n].to_vec();
@@ -79,6 +85,11 @@ mod test {
 
         bs.seek(0);
         assert_eq!(bs.pos(), 0);
+        // [255, 1, 0, 0, 1, 0, 0, 0]
+        assert_eq!(bs.read_u64(), 0xFF_01_00_00_01_00_00_00);
+        assert_eq!(bs.pos(), 8);
+
+        bs.seek(0);
         assert_eq!(bs.read_bytes(8), vec![255, 1, 0, 0, 1, 0, 0, 0]);
         assert_eq!(bs.pos(), 8);
     }
