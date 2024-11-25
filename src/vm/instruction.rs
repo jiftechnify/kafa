@@ -158,7 +158,26 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x92 => instr_i2c,
     0x93 => instr_i2s,
 
+    0x94 => instr_lcmp,
+    0x95 => instr_fcmpl,
+    0x96 => instr_fcmpg,
+    0x97 => instr_dcmpl,
+    0x98 => instr_dcmpg,
+    0x99 => instr_ifeq,
+    0x9A => instr_ifne,
+    0x9B => instr_iflt,
+    0x9C => instr_ifge,
+    0x9D => instr_ifgt,
+    0x9E => instr_ifle,
+    0x9F => instr_if_icmpeq,
+    0xA0 => instr_if_icmpne,
+    0xA1 => instr_if_icmplt,
+    0xA2 => instr_if_icmple,
     0xA3 => instr_if_icmpgt,
+    0xA4 => instr_if_icmpge,
+    0xA5 => instr_if_acmpeq,
+    0xA6 => instr_if_acmpne,
+
     0xA7 => instr_goto,
     0xAC => instr_ireturn,
 };
@@ -672,26 +691,117 @@ instr_conversion!(instr_i2b, Value::Int, trunc, i8);
 instr_conversion!(instr_i2c, Value::Int, trunc, u16);
 instr_conversion!(instr_i2s, Value::Int, trunc, i16);
 
-// compare the top (rhs) and the 2nd-top (lhs) values of the operand stack.
-// if lhs > rhs, move PC to: {current PC} + {delta}
-// operands: delta of PC(signed int)
-#[allow(overflowing_literals)]
-fn instr_if_icmpgt(t: &mut Thread) -> InstructionResult {
+// compare the top (rhs) and the 2nd-top (lhs) values of the operand stack, assuming both are Long values.
+// push the result of the comparison to the operand stack.
+fn instr_lcmp(t: &mut Thread) -> InstructionResult {
     let frame = t.current_frame();
 
-    let pc_delta = frame.next_param_u16() as i16;
-    let Value::Int(rhs) = frame.pop_operand() else {
-        return Err("target operand is not type 'int'".into());
+    let Value::Long(rhs) = frame.pop_operand() else {
+        return Err("target operand is not type 'long'".into());
     };
-    let Value::Int(lhs) = frame.pop_operand() else {
-        return Err("target operand is not type 'int'".into());
+    let Value::Long(lhs) = frame.pop_operand() else {
+        return Err("target operand is not type 'long'".into());
     };
-    if lhs > rhs {
-        let jmp_dest = (frame.get_pc() as i16 + pc_delta) as u16;
-        frame.jump_pc(jmp_dest);
-    }
+    let cmp = match lhs.cmp(&rhs) {
+        std::cmp::Ordering::Less => -1,
+        std::cmp::Ordering::Equal => 0,
+        std::cmp::Ordering::Greater => 1,
+    };
+    frame.push_operand(Value::Int(cmp));
     Ok(())
 }
+
+// compare the top (rhs) and the 2nd-top (lhs) values of the operand stack, assuming both are floating-point type values.
+// push the result of the comparison to the operand stack. if either of the values is NaN, push $if_nan.
+macro_rules! instr_compare_floats {
+    ($name:ident, $vtype:path, $vtype_name:expr, $if_nan:expr) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+
+            let $vtype(rhs) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type '", $vtype_name, "'").into());
+            };
+            let $vtype(lhs) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type '", $vtype_name, "'").into());
+            };
+            let cmp = match lhs.partial_cmp(&rhs) {
+                Some(std::cmp::Ordering::Less) => -1,
+                Some(std::cmp::Ordering::Equal) => 0,
+                Some(std::cmp::Ordering::Greater) => 1,
+                None => $if_nan,
+            };
+            frame.push_operand(Value::Int(cmp));
+            Ok(())
+        }
+    };
+}
+
+instr_compare_floats!(instr_fcmpl, Value::Float, "float", -1);
+instr_compare_floats!(instr_fcmpg, Value::Float, "float", 1);
+instr_compare_floats!(instr_dcmpl, Value::Double, "double", -1);
+instr_compare_floats!(instr_dcmpg, Value::Double, "double", 1);
+
+// compare the top of operand stack (v) with 0.
+// if v $cmp_op 0, move PC to: {current PC} + {delta}
+// operands: delta of PC(signed int)
+macro_rules! instr_if_cond {
+    ($name:ident, $cmp_op:tt) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+
+            let pc_delta = frame.next_param_u16() as i16;
+            let Value::Int(v) = frame.pop_operand() else {
+                return Err("target operand is not type 'int'".into());
+            };
+            if v $cmp_op 0 {
+                let jmp_dest = (frame.get_pc() as i16 + pc_delta) as u16;
+                frame.jump_pc(jmp_dest);
+            }
+            Ok(())
+        }
+    };
+}
+
+instr_if_cond!(instr_ifeq, ==);
+instr_if_cond!(instr_ifne, !=);
+instr_if_cond!(instr_iflt, <);
+instr_if_cond!(instr_ifle, <=);
+instr_if_cond!(instr_ifgt, >);
+instr_if_cond!(instr_ifge, >=);
+
+// compare the top (rhs) and the 2nd-top (lhs) values of the operand stack.
+// if lhs $cmp_op rhs, move PC to: {current PC} + {delta}
+// operands: delta of PC(signed int)
+macro_rules! instr_cmp_cond {
+    ($name:ident, $cmp_op:tt, $vtype:path, $vtype_name:expr) => {
+        #[allow(overflowing_literals)]
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+
+            let pc_delta = frame.next_param_u16() as i16;
+            let $vtype(rhs) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type '", $vtype_name, "'").into());
+            };
+            let $vtype(lhs) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type '", $vtype_name, "'").into());
+            };
+            if lhs $cmp_op rhs {
+                let jmp_dest = (frame.get_pc() as i16 + pc_delta) as u16;
+                frame.jump_pc(jmp_dest);
+            }
+            Ok(())
+        }
+    };
+}
+
+instr_cmp_cond!(instr_if_icmpeq, ==, Value::Int, "int");
+instr_cmp_cond!(instr_if_icmpne, !=, Value::Int, "int");
+instr_cmp_cond!(instr_if_icmplt, < , Value::Int, "int");
+instr_cmp_cond!(instr_if_icmple, <=, Value::Int, "int");
+instr_cmp_cond!(instr_if_icmpgt, > , Value::Int, "int");
+instr_cmp_cond!(instr_if_icmpge, >=, Value::Int, "int");
+instr_cmp_cond!(instr_if_acmpeq, ==, Value::Reference, "reference");
+instr_cmp_cond!(instr_if_acmpne, !=, Value::Reference, "reference");
 
 // move PC to: {current PC} + {delta}
 // operands: delta of PC(signed int)
