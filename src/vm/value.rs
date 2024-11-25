@@ -11,6 +11,20 @@ pub enum Value {
     ReturnAddress(usize),
 }
 
+pub enum ValueCategory {
+    One,
+    Two,
+}
+
+impl Value {
+    pub fn category(&self) -> ValueCategory {
+        match &self {
+            Value::Long(_) | Value::Double(_) => ValueCategory::Two,
+            _ => ValueCategory::One,
+        }
+    }
+}
+
 pub enum ValueType {
     Byte,
     Short,

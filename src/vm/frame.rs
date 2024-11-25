@@ -83,6 +83,15 @@ impl Frame {
         self.op_stack.pop().expect("stack underflow")
     }
 
+    pub fn peek_operand(&self) -> &Value {
+        self.op_stack.last().expect("stack underflow")
+    }
+
+    pub fn dup_operand(&mut self) {
+        let v = self.peek_operand();
+        self.push_operand(*v);
+    }
+
     // 呼び出すメソッドにn個の引数を渡す処理
     // 呼び出し元フレームのスタックトップからn個ぶんの値を、呼び出し先フレームのローカル変数の先頭n個ぶんの値としてセット
     //

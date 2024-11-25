@@ -1,5 +1,5 @@
 use super::thread::Thread;
-use super::value::Value;
+use super::value::{Value, ValueCategory};
 
 type InstructionResult = Result<(), Box<dyn std::error::Error>>;
 type Instruction = fn(&mut Thread) -> InstructionResult;
@@ -93,6 +93,16 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x4C => instr_astore_n::<1>,
     0x4D => instr_astore_n::<2>,
     0x4E => instr_astore_n::<3>,
+
+    0x57 => instr_pop,
+    0x58 => instr_pop2,
+    0x59 => instr_dup,
+    0x5A => instr_dup_x1,
+    0x5B => instr_dup_x2,
+    0x5C => instr_dup2,
+    0x5D => instr_dup2_x1,
+    0x5E => instr_dup2_x2,
+    0x5F => instr_swap,
 
     0x60 => instr_iadd,
     0x84 => instr_iinc,
@@ -214,6 +224,205 @@ instr_store!(instr_lstore, instr_lstore_n, Value::Long, "long");
 instr_store!(instr_fstore, instr_fstore_n, Value::Float, "float");
 instr_store!(instr_dstore, instr_dstore_n, Value::Double, "double");
 instr_store!(instr_astore, instr_astore_n, Value::Reference, "reference");
+
+macro_rules! pop_operand_if_category_matches {
+    ($frame:expr, $category:pat) => {{
+        let $category = $frame.peek_operand().category() else {
+            return Err("can't execute instruction to current operand stack".into());
+        };
+        $frame.pop_operand()
+    }};
+}
+
+fn instr_pop(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    pop_operand_if_category_matches!(frame, ValueCategory::One);
+    Ok(())
+}
+
+fn instr_pop2(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    match frame.peek_operand().category() {
+        ValueCategory::Two => {
+            frame.pop_operand();
+            Ok(())
+        }
+        ValueCategory::One => {
+            frame.pop_operand();
+            pop_operand_if_category_matches!(frame, ValueCategory::One);
+            Ok(())
+        }
+    }
+}
+
+fn instr_dup(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    let top = frame.peek_operand();
+    let ValueCategory::One = top.category() else {
+        return Err("top of operand stack is not category 1 value".into());
+    };
+    frame.dup_operand();
+    Ok(())
+}
+
+fn instr_dup_x1(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+
+    let v1 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+    let v2 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+
+    frame.push_operand(v1);
+    frame.push_operand(v2);
+    frame.push_operand(v1);
+    Ok(())
+}
+
+fn instr_dup_x2(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    let v1 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+
+    match frame.peek_operand().category() {
+        ValueCategory::One => {
+            // Form 1 (..., v3, v2, v1 -> ..., v1, v3, v2, v1)
+            let v2 = frame.pop_operand();
+            let v3 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+
+            frame.push_operand(v1);
+            frame.push_operand(v3);
+            frame.push_operand(v2);
+            frame.push_operand(v1);
+            Ok(())
+        }
+        ValueCategory::Two => {
+            // Form 2 (..., v2, v1 -> ..., v1, v2, v1 )
+            let v2 = frame.pop_operand();
+            frame.push_operand(v1);
+            frame.push_operand(v2);
+            frame.push_operand(v1);
+            Ok(())
+        }
+    }
+}
+
+fn instr_dup2(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    match frame.peek_operand().category() {
+        ValueCategory::One => {
+            // Form 1 (..., v2, v1 -> ..., v2, v1, v2, v1)
+            let v1 = frame.pop_operand();
+            let v2 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+
+            frame.push_operand(v2);
+            frame.push_operand(v1);
+            frame.push_operand(v2);
+            frame.push_operand(v1);
+            Ok(())
+        }
+        ValueCategory::Two => {
+            // Form 2 (..., v1 -> ..., v1, v1)
+            frame.dup_operand();
+            Ok(())
+        }
+    }
+}
+
+fn instr_dup2_x1(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    match frame.peek_operand().category() {
+        ValueCategory::One => {
+            // Form 1
+            let v1 = frame.pop_operand();
+            let v2 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+            let v3 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+
+            frame.push_operand(v2);
+            frame.push_operand(v1);
+            frame.push_operand(v3);
+            frame.push_operand(v2);
+            frame.push_operand(v1);
+        }
+        ValueCategory::Two => {
+            // Form 2
+            let v1 = frame.pop_operand();
+            let v2 = pop_operand_if_category_matches!(frame, ValueCategory::Two);
+
+            frame.push_operand(v1);
+            frame.push_operand(v2);
+            frame.push_operand(v1);
+        }
+    }
+    Ok(())
+}
+
+fn instr_dup2_x2(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    match frame.peek_operand().category() {
+        ValueCategory::One => {
+            // Form 1, Form 3
+            let v1 = frame.pop_operand();
+            let v2 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+            match frame.peek_operand().category() {
+                ValueCategory::One => {
+                    // Form 1
+                    let v3 = frame.pop_operand();
+                    let v4 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+
+                    frame.push_operand(v2);
+                    frame.push_operand(v1);
+                    frame.push_operand(v4);
+                    frame.push_operand(v3);
+                    frame.push_operand(v2);
+                    frame.push_operand(v1);
+                }
+                ValueCategory::Two => {
+                    // Form 3
+                    let v3 = frame.pop_operand();
+
+                    frame.push_operand(v2);
+                    frame.push_operand(v1);
+                    frame.push_operand(v3);
+                    frame.push_operand(v2);
+                    frame.push_operand(v1);
+                }
+            }
+        }
+        ValueCategory::Two => {
+            // Form 2, Form 4
+            let v1 = frame.pop_operand();
+            match frame.peek_operand().category() {
+                ValueCategory::One => {
+                    // Form 2
+                    let v2 = frame.pop_operand();
+                    let v3 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+
+                    frame.push_operand(v1);
+                    frame.push_operand(v3);
+                    frame.push_operand(v2);
+                    frame.push_operand(v1);
+                }
+                ValueCategory::Two => {
+                    // Form 4
+                    let v2 = frame.pop_operand();
+
+                    frame.push_operand(v1);
+                    frame.push_operand(v2);
+                    frame.push_operand(v1);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn instr_swap(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    let v1 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+    let v2 = pop_operand_if_category_matches!(frame, ValueCategory::One);
+
+    frame.push_operand(v1);
+    frame.push_operand(v2);
+    Ok(())
+}
 
 // pop 2 values, add them and push the result
 fn instr_iadd(t: &mut Thread) -> InstructionResult {
