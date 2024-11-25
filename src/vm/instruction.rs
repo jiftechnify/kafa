@@ -180,6 +180,11 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
 
     0xA7 => instr_goto,
     0xAC => instr_ireturn,
+    0xAD => instr_lreturn,
+    0xAE => instr_freturn,
+    0xAF => instr_dreturn,
+    0xB0 => instr_areturn,
+    0xB1 => instr_return,
 };
 
 // no-op
@@ -815,14 +820,30 @@ fn instr_goto(t: &mut Thread) -> InstructionResult {
 }
 
 // return from the method
-fn instr_ireturn(t: &mut Thread) -> InstructionResult {
-    // pop from the operand stack; it's a return value of the method
-    let ret = t.current_frame().pop_operand();
-    // discard the frame for the method
-    t.pop_frame();
+macro_rules! instr_return {
+    ($name:ident, void) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            t.pop_frame();
+            Ok(())
+        }
+    };
+    ($name:ident, $vtype:path, $vtype_name:expr) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+            let ret @ $vtype(_) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type '", $vtype_name, "'").into());
+            };
 
-    // now, current_frame is the frame for the callee method
-    // push the return value to the operand stack of the callee frame
-    t.current_frame().push_operand(ret);
-    Ok(())
+            t.pop_frame();
+            t.current_frame().push_operand(ret);
+            Ok(())
+        }
+    };
 }
+
+instr_return!(instr_ireturn, Value::Int, "int");
+instr_return!(instr_lreturn, Value::Long, "long");
+instr_return!(instr_freturn, Value::Float, "float");
+instr_return!(instr_dreturn, Value::Double, "double");
+instr_return!(instr_areturn, Value::Reference, "reference");
+instr_return!(instr_return, void);
