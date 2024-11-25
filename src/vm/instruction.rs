@@ -908,8 +908,6 @@ fn instr_lookupswitch(t: &mut Thread) -> InstructionResult {
             let match_key = frame.next_params_u32() as i32;
             let offset = frame.next_params_u32() as i32;
             if key == match_key {
-                let jmp_dest = (frame.get_pc() as i32 + offset) as u32;
-                frame.jump_pc(jmp_dest);
                 break offset;
             }
         }
