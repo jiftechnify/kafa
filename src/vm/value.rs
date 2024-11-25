@@ -8,7 +8,7 @@ pub enum Value {
     Float(f32),
     Double(f64),
     Reference(usize),
-    ReturnAddress(usize),
+    ReturnAddress(u32),
 }
 
 pub enum ValueCategory {

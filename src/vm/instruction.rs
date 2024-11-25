@@ -179,6 +179,10 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0xA6 => instr_if_acmpne,
 
     0xA7 => instr_goto,
+    0xA8 => instr_jsr,
+    0xA9 => instr_ret,
+    0xAA => instr_tableswitch,
+    0xAB => instr_lookupswitch,
     0xAC => instr_ireturn,
     0xAD => instr_lreturn,
     0xAE => instr_freturn,
@@ -754,12 +758,12 @@ macro_rules! instr_if_cond {
         fn $name(t: &mut Thread) -> InstructionResult {
             let frame = t.current_frame();
 
-            let pc_delta = frame.next_param_u16() as i16;
+            let pc_delta = frame.next_param_u16() as i32;
             let Value::Int(v) = frame.pop_operand() else {
                 return Err("target operand is not type 'int'".into());
             };
             if v $cmp_op 0 {
-                let jmp_dest = (frame.get_pc() as i16 + pc_delta) as u16;
+                let jmp_dest = (frame.get_pc() as i32 + pc_delta) as u32;
                 frame.jump_pc(jmp_dest);
             }
             Ok(())
@@ -783,7 +787,7 @@ macro_rules! instr_cmp_cond {
         fn $name(t: &mut Thread) -> InstructionResult {
             let frame = t.current_frame();
 
-            let pc_delta = frame.next_param_u16() as i16;
+            let pc_delta = frame.next_param_u16() as i32;
             let $vtype(rhs) = frame.pop_operand() else {
                 return Err(concat!("target operand is not type '", $vtype_name, "'").into());
             };
@@ -791,7 +795,7 @@ macro_rules! instr_cmp_cond {
                 return Err(concat!("target operand is not type '", $vtype_name, "'").into());
             };
             if lhs $cmp_op rhs {
-                let jmp_dest = (frame.get_pc() as i16 + pc_delta) as u16;
+                let jmp_dest = (frame.get_pc() as i32 + pc_delta) as u32;
                 frame.jump_pc(jmp_dest);
             }
             Ok(())
@@ -813,8 +817,92 @@ instr_cmp_cond!(instr_if_acmpne, !=, Value::Reference, "reference");
 fn instr_goto(t: &mut Thread) -> InstructionResult {
     let frame = t.current_frame();
 
-    let pc_delta = frame.next_param_u16() as i16;
-    let jmp_dest = (frame.get_pc() as i16 + pc_delta) as u16;
+    let pc_delta = frame.next_param_u16() as i32;
+    let jmp_dest = (frame.get_pc() as i32 + pc_delta) as u32;
+    frame.jump_pc(jmp_dest);
+    Ok(())
+}
+
+// push the "return address" (PC for next instruction) to the operand stack, then jump to {current PC} + {delta}
+// operands: delta of PC(signed int)
+fn instr_jsr(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+
+    let pc_delta = frame.next_param_u16() as i32;
+    let jmp_dest = (frame.get_pc() as i32 + pc_delta) as u32;
+    frame.push_operand(Value::ReturnAddress(frame.get_pc() + 3)); // next instruction is 3 bytes ahead from jsr
+    frame.jump_pc(jmp_dest);
+    Ok(())
+}
+
+// jump to the "return address" stored in the specified local (by index)
+fn instr_ret(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+
+    let idx = frame.next_param_u8() as usize;
+    let Value::ReturnAddress(pc) = frame.get_local(idx) else {
+        return Err("target local is not type 'returnAddress'".into());
+    };
+    frame.jump_pc(pc);
+    Ok(())
+}
+
+fn instr_tableswitch(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+
+    frame.skip_code_padding(4);
+    let default = frame.next_params_u32() as i32;
+    let low = frame.next_params_u32() as i32;
+    let high = frame.next_params_u32() as i32;
+
+    let Value::Int(idx) = frame.pop_operand() else {
+        return Err("target operand is not type 'int'".into());
+    };
+    let offset = if idx < low || idx > high {
+        default
+    } else {
+        let i = idx - low;
+        assert!(i >= 0);
+        for _ in 0..i {
+            frame.next_params_u32();
+        }
+        frame.next_params_u32() as i32
+    };
+
+    let jmp_dest = (frame.get_pc() as i32 + offset) as u32;
+    frame.jump_pc(jmp_dest);
+    Ok(())
+}
+
+fn instr_lookupswitch(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+
+    frame.skip_code_padding(4);
+    let default = frame.next_params_u32() as i32;
+    let n_pairs = frame.next_params_u32() as usize;
+
+    let Value::Int(key) = frame.pop_operand() else {
+        return Err("target operand is not type 'int'".into());
+    };
+    let offset = {
+        let mut i = 0;
+        loop {
+            i += 1;
+            if i > n_pairs {
+                break default;
+            }
+
+            let match_key = frame.next_params_u32() as i32;
+            let offset = frame.next_params_u32() as i32;
+            if key == match_key {
+                let jmp_dest = (frame.get_pc() as i32 + offset) as u32;
+                frame.jump_pc(jmp_dest);
+                break offset;
+            }
+        }
+    };
+
+    let jmp_dest = (frame.get_pc() as i32 + offset) as u32;
     frame.jump_pc(jmp_dest);
     Ok(())
 }

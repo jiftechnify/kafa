@@ -5,7 +5,7 @@ pub struct Frame {
     locals: Vec<Option<Value>>,
     op_stack: Vec<Value>,
     code: ByteSeq,
-    pc: u16,
+    pc: u32,
 }
 
 impl Frame {
@@ -52,7 +52,7 @@ impl Frame {
 
     /* 命令デコード */
     pub fn next_instruction(&mut self) -> u8 {
-        self.pc = self.code.pos() as u16;
+        self.pc = self.code.pos() as u32;
         self.code.read_u8()
     }
 
@@ -64,12 +64,26 @@ impl Frame {
         self.code.read_u16()
     }
 
+    pub fn next_params_u32(&mut self) -> u32 {
+        self.code.read_u32()
+    }
+
+    // n-byteアラインメントのためのパディングを読み飛ばす
+    pub fn skip_code_padding(&mut self, align: usize) {
+        let pad_size = align - self.code.pos() % align;
+        if pad_size == align {
+            // already aligned
+            return;
+        }
+        self.code.skip(pad_size);
+    }
+
     /* プログラムカウンタ操作 */
-    pub fn get_pc(&self) -> u16 {
+    pub fn get_pc(&self) -> u32 {
         self.pc
     }
 
-    pub fn jump_pc(&mut self, pc: u16) {
+    pub fn jump_pc(&mut self, pc: u32) {
         self.pc = pc;
         self.code.seek(pc as usize);
     }
