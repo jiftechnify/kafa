@@ -25,6 +25,7 @@ macro_rules! instruction_table {
 const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x00 => instr_nop,
 
+    0x01 => instr_aconst_null,
     0x02 => instr_iconst::<-1>,
     0x03 => instr_iconst::<0>,
     0x04 => instr_iconst::<1>,
@@ -41,6 +42,7 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x0F => instr_dconst_1,
     0x10 => instr_bipush,
     0x11 => instr_sipush,
+    // TODO: implement load from constant pool
 
     0x15 => instr_iload,
     0x16 => instr_lload,
@@ -67,6 +69,7 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x2B => instr_aload_n::<1>,
     0x2C => instr_aload_n::<2>,
     0x2D => instr_aload_n::<3>,
+    // TODO: implement load from array
 
     0x36 => instr_istore,
     0x37 => instr_lstore,
@@ -93,6 +96,7 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x4C => instr_astore_n::<1>,
     0x4D => instr_astore_n::<2>,
     0x4E => instr_astore_n::<3>,
+    // TODO: implement store to array
 
     0x57 => instr_pop,
     0x58 => instr_pop2,
@@ -189,10 +193,19 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0xAF => instr_dreturn,
     0xB0 => instr_areturn,
     0xB1 => instr_return,
+
+    // TODO: implement instructions for reference type values
 };
 
 // no-op
 fn instr_nop(_: &mut Thread) -> InstructionResult {
+    Ok(())
+}
+
+// push null reference to the operand stack
+// TODO: representation of null reference is TENTATIVE
+fn instr_aconst_null(t: &mut Thread) -> InstructionResult {
+    t.current_frame().push_operand(Value::Reference(0));
     Ok(())
 }
 
