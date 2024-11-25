@@ -142,6 +142,22 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x83 => instr_lxor,
     0x84 => instr_iinc,
 
+    0x85 => instr_i2l,
+    0x86 => instr_i2f,
+    0x87 => instr_i2d,
+    0x88 => instr_l2i,
+    0x89 => instr_l2f,
+    0x8A => instr_l2d,
+    0x8B => instr_f2i,
+    0x8C => instr_f2l,
+    0x8D => instr_f2d,
+    0x8E => instr_d2i,
+    0x8F => instr_d2l,
+    0x90 => instr_d2f,
+    0x91 => instr_i2b,
+    0x92 => instr_i2c,
+    0x93 => instr_i2s,
+
     0xA3 => instr_if_icmpgt,
     0xA7 => instr_goto,
     0xAC => instr_ireturn,
@@ -612,6 +628,49 @@ fn instr_iinc(t: &mut Thread) -> InstructionResult {
     frame.set_local(idx, Value::Int(v + delta));
     Ok(())
 }
+
+macro_rules! instr_conversion {
+    ($name:ident, $from:path, trunc, $to_raw:ty) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+            let $from(v) = frame.pop_operand() else {
+                return Err(concat!("target operand has invalid type").into());
+            };
+            frame.push_operand(Value::Int((v as $to_raw) as i32));
+            Ok(())
+        }
+    };
+    ($name:ident, $from:path, $to:path, $to_raw:ty) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+            let $from(v) = frame.pop_operand() else {
+                return Err(concat!("target operand has invalid type").into());
+            };
+            frame.push_operand($to(v as $to_raw));
+            Ok(())
+        }
+    };
+}
+
+instr_conversion!(instr_i2l, Value::Int, Value::Long, i64);
+instr_conversion!(instr_i2f, Value::Int, Value::Float, f32);
+instr_conversion!(instr_i2d, Value::Int, Value::Double, f64);
+
+instr_conversion!(instr_l2i, Value::Long, Value::Int, i32);
+instr_conversion!(instr_l2f, Value::Long, Value::Float, f32);
+instr_conversion!(instr_l2d, Value::Long, Value::Double, f64);
+
+instr_conversion!(instr_f2i, Value::Float, Value::Int, i32);
+instr_conversion!(instr_f2l, Value::Float, Value::Long, i64);
+instr_conversion!(instr_f2d, Value::Float, Value::Double, f64);
+
+instr_conversion!(instr_d2i, Value::Double, Value::Int, i32);
+instr_conversion!(instr_d2l, Value::Double, Value::Long, i64);
+instr_conversion!(instr_d2f, Value::Double, Value::Float, f32);
+
+instr_conversion!(instr_i2b, Value::Int, trunc, i8);
+instr_conversion!(instr_i2c, Value::Int, trunc, u16);
+instr_conversion!(instr_i2s, Value::Int, trunc, i16);
 
 // compare the top (rhs) and the 2nd-top (lhs) values of the operand stack.
 // if lhs > rhs, move PC to: {current PC} + {delta}
