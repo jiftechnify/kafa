@@ -1,21 +1,26 @@
 use super::value::Value;
-use crate::{class_file::MethodInfo, support::ByteSeq};
+use crate::{
+    class_file::{CPInfo, ConstantPool, MethodInfo},
+    support::ByteSeq,
+};
 
 pub struct Frame {
     locals: Vec<Option<Value>>,
     op_stack: Vec<Value>,
+    const_pool: ConstantPool,
     code: ByteSeq,
     pc: u32,
 }
 
 impl Frame {
-    pub fn new(method: &MethodInfo) -> Frame {
+    pub fn new(const_pool: ConstantPool, method: &MethodInfo) -> Frame {
         let code_attr = method.get_code_attr().expect("method must have code attr");
         let code_reader = ByteSeq::new(code_attr.code.as_slice()).unwrap();
 
         Frame {
             locals: vec![Option::default(); code_attr.max_locals as usize],
             op_stack: Vec::with_capacity(code_attr.max_stack as usize),
+            const_pool,
             code: code_reader,
             pc: 0,
         }
@@ -25,6 +30,7 @@ impl Frame {
         Frame {
             locals: Vec::new(),
             op_stack: Vec::new(),
+            const_pool: ConstantPool::empty(),
             code: ByteSeq::new(vec![].as_slice()).unwrap(),
             pc: 0,
         }
@@ -130,6 +136,10 @@ impl Frame {
             0,
             locals_rev.into_iter().rev().collect::<Vec<_>>().as_slice(),
         );
+    }
+
+    pub fn get_cp_info(&self, idx: u16) -> &CPInfo {
+        self.const_pool.get_info(idx)
     }
 }
 

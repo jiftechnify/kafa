@@ -6,10 +6,11 @@ mod attr;
 mod const_pool;
 
 use attr::{parse_attributes, Attribute, CodeAttr};
-use const_pool::ConstantPool;
+pub use const_pool::{CPInfo, ConstantPool};
 
 #[derive(Debug)]
 pub struct ClassFile {
+    pub constant_pool: ConstantPool,
     pub methods: Vec<MethodInfo>,
 }
 
@@ -43,7 +44,10 @@ impl ClassFile {
 
         // skip attributes
 
-        Ok(ClassFile { methods })
+        Ok(ClassFile {
+            constant_pool: cp,
+            methods,
+        })
     }
 }
 

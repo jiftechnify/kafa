@@ -46,7 +46,8 @@ impl VM {
             .find_method(method_name, method_desc)
             .ok_or_else(|| format!("method not found (name={method_name}, desc={method_desc})"))?;
 
-        self.thread.exec_method(method)?;
+        self.thread
+            .exec_method(cls_file.constant_pool.clone(), method)?;
 
         let res = self.thread.current_frame().pop_operand();
         Ok(res)

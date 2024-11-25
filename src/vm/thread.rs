@@ -1,4 +1,7 @@
-use crate::{class_file::MethodInfo, vm::frame::Frame};
+use crate::{
+    class_file::{ConstantPool, MethodInfo},
+    vm::frame::Frame,
+};
 
 use super::instruction::exec_instr;
 
@@ -25,12 +28,16 @@ impl Thread {
             .expect("no frame belongs to the thread")
     }
 
-    pub fn exec_method(&mut self, method: &MethodInfo) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn exec_method(
+        &mut self,
+        const_pool: ConstantPool,
+        method: &MethodInfo,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let caller = self.current_frame();
         let caller_addr = caller as *const Frame as usize;
 
         // create frame for callee method, and pass arguments from caller's stack
-        let mut callee = Frame::new(method);
+        let mut callee = Frame::new(const_pool, method);
         Frame::transfer_args(caller, &mut callee, method.num_args());
 
         // switch to the callee frame

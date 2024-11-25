@@ -1,6 +1,6 @@
 use crate::support::ByteSeq;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ConstantPool(Vec<CPInfo>);
 
 impl ConstantPool {
@@ -13,6 +13,10 @@ impl ConstantPool {
         Ok(ConstantPool(cp))
     }
 
+    pub fn empty() -> ConstantPool {
+        ConstantPool(Vec::new())
+    }
+
     pub fn get_utf8(&self, idx: u16) -> &str {
         if let CPInfo::Utf8(s) = self.get_info(idx) {
             s.as_str()
@@ -22,7 +26,7 @@ impl ConstantPool {
         }
     }
 
-    fn get_info(&self, idx: u16) -> &CPInfo {
+    pub fn get_info(&self, idx: u16) -> &CPInfo {
         assert!(idx > 0);
         &self.0[idx as usize - 1]
     }
@@ -30,8 +34,8 @@ impl ConstantPool {
 
 /// Class/MethodRef/NameAndTypeが持つインデックスは、ConstantPool内の他のエントリへの参照。
 /// インデックスは1-オリジンであることに注意!
-#[derive(Debug)]
-enum CPInfo {
+#[derive(Debug, Clone)]
+pub enum CPInfo {
     Utf8(String),
     Integer(i32),
     Float(f32),

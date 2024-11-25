@@ -1,3 +1,5 @@
+use crate::class_file::CPInfo;
+
 use super::thread::Thread;
 use super::value::{Value, ValueCategory};
 
@@ -42,7 +44,9 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x0F => instr_dconst_1,
     0x10 => instr_bipush,
     0x11 => instr_sipush,
-    // TODO: implement load from constant pool
+    0x12 => instr_ldc,
+    0x13 => instr_ldc_w,
+    0x14 => instr_ldc2_w,
 
     0x15 => instr_iload,
     0x16 => instr_lload,
@@ -259,6 +263,51 @@ fn instr_sipush(t: &mut Thread) -> InstructionResult {
     let frame = t.current_frame();
     let v = frame.next_param_u16() as i16 as i32;
     frame.push_operand(Value::Int(v));
+    Ok(())
+}
+
+// push a constant from constant pool to the operand stack
+fn instr_ldc(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    let idx = frame.next_param_u8();
+    let v = match frame.get_cp_info(idx as u16) {
+        CPInfo::Integer(v) => Value::Int(*v),
+        CPInfo::Float(v) => Value::Float(*v),
+        CPInfo::Double(_) | CPInfo::Long(_) => Err("can't load double/long with ldc")?,
+        // TODO: support symbolic references, string consts, etc.
+        _ => Err("unsupported constant pool entry")?,
+    };
+    frame.push_operand(v);
+    Ok(())
+}
+
+// push a constant from constant pool to the operand stack (wide index)
+fn instr_ldc_w(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    let idx = frame.next_param_u16();
+    let v = match frame.get_cp_info(idx) {
+        CPInfo::Integer(v) => Value::Int(*v),
+        CPInfo::Float(v) => Value::Float(*v),
+        CPInfo::Double(_) | CPInfo::Long(_) => Err("can't load double/long consts with ldc_w")?,
+        // TODO: support symbolic references, string consts, etc.
+        _ => Err("unsupported constant pool entry")?,
+    };
+    frame.push_operand(v);
+    Ok(())
+}
+
+// push a long/double constant from constant pool to the operand stack (wide index)
+fn instr_ldc2_w(t: &mut Thread) -> InstructionResult {
+    let frame = t.current_frame();
+    let idx = frame.next_param_u16();
+    let v = match frame.get_cp_info(idx) {
+        CPInfo::Long(v) => Value::Long(*v),
+        CPInfo::Double(v) => Value::Double(*v),
+        CPInfo::Integer(_) | CPInfo::Float(_) => Err("can't load int/float consts with ldc2_w")?,
+        // TODO: support symbolic references
+        _ => Err("unsupported constant pool entry")?,
+    };
+    frame.push_operand(v);
     Ok(())
 }
 
