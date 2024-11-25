@@ -105,7 +105,43 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x5F => instr_swap,
 
     0x60 => instr_iadd,
+    0x61 => instr_ladd,
+    0x62 => instr_fadd,
+    0x63 => instr_dadd,
+    0x64 => instr_isub,
+    0x65 => instr_lsub,
+    0x66 => instr_fsub,
+    0x67 => instr_dsub,
+    0x68 => instr_imul,
+    0x69 => instr_lmul,
+    0x6A => instr_fmul,
+    0x6B => instr_dmul,
+    0x6C => instr_idiv,
+    0x6D => instr_ldiv,
+    0x6E => instr_fdiv,
+    0x6F => instr_ddiv,
+    0x70 => instr_irem,
+    0x71 => instr_lrem,
+    0x72 => instr_frem,
+    0x73 => instr_drem,
+    0x74 => instr_ineg,
+    0x75 => instr_lneg,
+    0x76 => instr_fneg,
+    0x77 => instr_dneg,
+    0x78 => instr_ishl,
+    0x79 => instr_lshl,
+    0x7A => instr_ishr,
+    0x7B => instr_lshr,
+    0x7C => instr_iushr,
+    0x7D => instr_lushr,
+    0x7E => instr_iand,
+    0x7F => instr_land,
+    0x80 => instr_ior,
+    0x81 => instr_lor,
+    0x82 => instr_ixor,
+    0x83 => instr_lxor,
     0x84 => instr_iinc,
+
     0xA3 => instr_if_icmpgt,
     0xA7 => instr_goto,
     0xAC => instr_ireturn,
@@ -424,18 +460,143 @@ fn instr_swap(t: &mut Thread) -> InstructionResult {
     Ok(())
 }
 
-// pop 2 values, add them and push the result
-fn instr_iadd(t: &mut Thread) -> InstructionResult {
-    let frame = t.current_frame();
-    let Value::Int(rhs) = frame.pop_operand() else {
-        return Err("target operand is not type 'int'".into());
+macro_rules! instr_unary_op {
+    ($name:ident, $op:tt, $vtype:path, $vtype_name:expr) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+            let $vtype(v) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type '", $vtype_name, "'").into());
+            };
+            frame.push_operand($vtype($op v));
+            Ok(())
+        }
     };
-    let Value::Int(lhs) = frame.pop_operand() else {
-        return Err("target operand is not type 'int'".into());
-    };
-    frame.push_operand(Value::Int(lhs + rhs));
-    Ok(())
 }
+
+macro_rules! instr_binary_op {
+    ($name:ident, $op:tt, $vtype:path, $vtype_name:expr) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+            let $vtype(rhs) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type '", $vtype_name, "'").into());
+            };
+            let $vtype(lhs) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type '", $vtype_name, "'").into());
+            };
+            frame.push_operand($vtype(lhs $op rhs));
+            Ok(())
+        }
+    };
+}
+
+macro_rules! instr_shift_op {
+    // shift with zero-extension
+    ($name:ident, $op:tt, u, Value::Int) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+            let Value::Int(v2) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type 'int'").into());
+            };
+            let Value::Int(v1) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type 'int'").into());
+            };
+            let s = v2 & 0x1F; // take lowest 5 bits
+            frame.push_operand(Value::Int(((v1 as u32) $op s) as i32));
+            Ok(())
+        }
+    };
+    ($name:ident, $op:tt, u, Value::Long) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+            let Value::Int(v2) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type 'int'").into());
+            };
+            let Value::Long(v1) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type 'long'").into());
+            };
+            let s = v2 & 0x3F; // take lowest 6 bits
+            frame.push_operand(Value::Long(((v1 as u64) $op s) as i64));
+            Ok(())
+        }
+    };
+    // shift with sign-extension
+    ($name:ident, $op:tt, Value::Int) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+            let Value::Int(v2) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type 'int'").into());
+            };
+            let Value::Int(v1) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type 'int'").into());
+            };
+            let s = v2 & 0x1F; // take lowest 5 bits
+            frame.push_operand(Value::Int(v1 $op s));
+            Ok(())
+        }
+    };
+    ($name:ident, $op:tt, Value::Long) => {
+        fn $name(t: &mut Thread) -> InstructionResult {
+            let frame = t.current_frame();
+            let Value::Int(v2) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type 'int'").into());
+            };
+            let Value::Long(v1) = frame.pop_operand() else {
+                return Err(concat!("target operand is not type 'long'").into());
+            };
+            let s = v2 & 0x3F; // take lowest 6 bits
+            frame.push_operand(Value::Long(v1 $op s));
+            Ok(())
+        }
+    };
+}
+
+instr_binary_op!(instr_iadd, +, Value::Int, "int");
+instr_binary_op!(instr_ladd, +, Value::Long, "long");
+instr_binary_op!(instr_fadd, +, Value::Float, "float");
+instr_binary_op!(instr_dadd, +, Value::Double, "double");
+
+instr_binary_op!(instr_isub, -, Value::Int, "int");
+instr_binary_op!(instr_lsub, -, Value::Long, "long");
+instr_binary_op!(instr_fsub, -, Value::Float, "float");
+instr_binary_op!(instr_dsub, -, Value::Double, "double");
+
+instr_binary_op!(instr_imul, *, Value::Int, "int");
+instr_binary_op!(instr_lmul, *, Value::Long, "long");
+instr_binary_op!(instr_fmul, *, Value::Float, "float");
+instr_binary_op!(instr_dmul, *, Value::Double, "double");
+
+instr_binary_op!(instr_idiv, /, Value::Int, "int");
+instr_binary_op!(instr_ldiv, /, Value::Long, "long");
+instr_binary_op!(instr_fdiv, /, Value::Float, "float");
+instr_binary_op!(instr_ddiv, /, Value::Double, "double");
+
+instr_binary_op!(instr_irem, %, Value::Int, "int");
+instr_binary_op!(instr_lrem, %, Value::Long, "long");
+instr_binary_op!(instr_frem, %, Value::Float, "float");
+instr_binary_op!(instr_drem, %, Value::Double, "double");
+
+instr_unary_op!(instr_ineg, -, Value::Int, "int");
+instr_unary_op!(instr_lneg, -, Value::Long, "long");
+instr_unary_op!(instr_fneg, -, Value::Float, "float");
+instr_unary_op!(instr_dneg, -, Value::Double, "double");
+
+instr_shift_op!(instr_ishl, <<, Value::Int);
+instr_shift_op!(instr_lshl, <<, Value::Long);
+
+instr_shift_op!(instr_ishr, >>, Value::Int);
+instr_shift_op!(instr_lshr, >>, Value::Long);
+
+instr_shift_op!(instr_iushr, >>, u, Value::Int);
+instr_shift_op!(instr_lushr, >>, u, Value::Long);
+
+instr_binary_op!(instr_iand, &, Value::Int, "int");
+instr_binary_op!(instr_land, &, Value::Long, "long");
+
+instr_binary_op!(instr_ior, |, Value::Int, "int");
+instr_binary_op!(instr_lor, |, Value::Long, "long");
+
+instr_binary_op!(instr_ixor, ^, Value::Int, "int");
+instr_binary_op!(instr_lxor, ^, Value::Long, "long");
 
 // increment the value of the local (specified by index) by delta
 // operands: target local index, delta(signed int)
