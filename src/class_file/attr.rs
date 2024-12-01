@@ -1,8 +1,9 @@
-use crate::class_file::const_pool::ConstantPool;
+use crate::class_file::const_pool::{CPInfo, ConstantPool};
 use crate::support::ByteSeq;
 
 #[derive(Debug)]
 pub enum Attribute {
+    ConstantValue(ConstValAttr),
     Code(CodeAttr),
     Unsupported,
 }
@@ -16,6 +17,11 @@ pub fn parse_attributes(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<Attribute> {
         let len = bs.read_u32() as usize;
 
         let attr = match name {
+            // ConstantValue_attribute
+            ConstValAttr::NAME => {
+                let const_value_attr = parse_const_val_attr(bs, cp);
+                Attribute::ConstantValue(const_value_attr)
+            }
             // Code_attribute
             CodeAttr::NAME => {
                 let code_attr = parse_code_attr(bs, cp);
@@ -30,6 +36,23 @@ pub fn parse_attributes(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<Attribute> {
         vec.push(attr);
     }
     vec
+}
+
+#[derive(Debug)]
+pub struct ConstValAttr {
+    pub const_value: CPInfo,
+}
+
+impl ConstValAttr {
+    const NAME: &str = "ConstantValue";
+}
+
+fn parse_const_val_attr(bs: &mut ByteSeq, cp: &ConstantPool) -> ConstValAttr {
+    let constantvalue_idx = bs.read_u16();
+    let const_value = cp.get_info(constantvalue_idx).clone();
+    // TODO: validate that const_value is actually a "value"
+
+    ConstValAttr { const_value }
 }
 
 #[derive(Debug)]
