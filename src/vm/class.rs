@@ -14,7 +14,7 @@ impl Class {
 
         let mut static_methods = HashMap::new();
         for m in cls_file.methods.into_iter().filter(|m| m.is_static()) {
-            let (name, desc, max_stack, max_locals, code) = m.into_fields();
+            let (name, desc, max_stack, max_locals, code) = m.into_components();
             let sig = MethodSignature {
                 name,
                 descriptor: MethodDescriptor(desc),
