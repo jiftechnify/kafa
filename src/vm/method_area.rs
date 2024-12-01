@@ -1,6 +1,6 @@
 use std::{collections::HashMap, rc::Rc};
 
-use super::class::{Class, Method, MethodSignature};
+use super::class::{Class, FieldValue, Method, MethodSignature};
 
 pub struct MethodArea {
     classes: HashMap<String, Rc<Class>>,
@@ -24,6 +24,15 @@ impl MethodArea {
     // TODO: dynamic class loading
     pub fn lookup_class(&mut self, class_name: &str) -> Option<Rc<Class>> {
         self.classes.get(class_name).cloned()
+    }
+
+    pub fn lookup_static_field(
+        &mut self,
+        class_name: &str,
+        name: &str,
+    ) -> Option<(Rc<Class>, FieldValue)> {
+        self.lookup_class(class_name)
+            .and_then(|cls| cls.lookup_static_field(name).map(|fv| (cls, fv)))
     }
 
     pub fn lookup_static_method(

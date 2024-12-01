@@ -91,12 +91,21 @@ bitflags! {
 #[derive(Debug)]
 pub struct FieldInfo {
     access_flags: FieldAccessFlags,
-    name: String,
-    descriptor: String,
+    pub name: String,
+    pub descriptor: String,
     attributes: Vec<Attribute>,
 }
 
 impl FieldInfo {
+    pub fn get_const_val(&self) -> Option<&CPInfo> {
+        for attr in self.attributes.iter() {
+            if let Attribute::ConstantValue(const_val_attr) = attr {
+                return Some(&const_val_attr.const_value);
+            }
+        }
+        None
+    }
+
     pub fn is_static(&self) -> bool {
         self.access_flags.contains(FieldAccessFlags::STATIC)
     }
