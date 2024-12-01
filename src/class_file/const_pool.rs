@@ -1,7 +1,7 @@
 use crate::support::ByteSeq;
 
 #[derive(Debug, Clone)]
-pub struct ConstantPool(Vec<CPInfo>);
+pub struct ConstantPool(pub Vec<CPInfo>);
 
 impl ConstantPool {
     pub fn parse(bs: &mut ByteSeq) -> Result<ConstantPool, Box<dyn std::error::Error + 'static>> {
@@ -27,9 +27,72 @@ impl ConstantPool {
     }
 
     pub fn get_info(&self, idx: u16) -> &CPInfo {
-        assert!(idx > 0);
+        assert!(0 < idx && idx <= self.0.len() as u16);
         &self.0[idx as usize - 1]
     }
+
+    pub(in crate::class_file) fn get_class(&self, idx: u16) -> CPClassResolved {
+        let CPInfo::Class { name_idx } = self.get_info(idx) else {
+            eprintln!("not a CONSTANT_Class");
+            return CPClassResolved::default();
+        };
+        CPClassResolved {
+            name: self.get_utf8(*name_idx),
+        }
+    }
+
+    pub(in crate::class_file) fn get_name_and_type(&self, idx: u16) -> CPNameAndTypeResolved {
+        let CPInfo::NameAndType {
+            name_idx,
+            descriptor_idx,
+        } = self.get_info(idx)
+        else {
+            eprintln!("not a CONSTANT_NameAndType");
+            return CPNameAndTypeResolved::default();
+        };
+        CPNameAndTypeResolved {
+            name: self.get_utf8(*name_idx),
+            descriptor: self.get_utf8(*descriptor_idx),
+        }
+    }
+
+    pub(in crate::class_file) fn get_method_ref(&self, idx: u16) -> CPMethodrefResolved {
+        let CPInfo::Methodref {
+            class_idx,
+            name_and_type_idx,
+        } = self.get_info(idx)
+        else {
+            eprintln!("not a CONSTANT_Methodref");
+            return CPMethodrefResolved::default();
+        };
+        let cls = self.get_class(*class_idx);
+        let nt = self.get_name_and_type(*name_and_type_idx);
+        CPMethodrefResolved {
+            class: cls,
+            name_and_type: nt,
+        }
+    }
+
+    pub fn infos(&self) -> impl Iterator<Item = &CPInfo> {
+        self.0.iter()
+    }
+}
+
+#[derive(Default)]
+pub(in crate::class_file) struct CPClassResolved<'a> {
+    pub name: &'a str,
+}
+
+#[derive(Default)]
+pub(in crate::class_file) struct CPNameAndTypeResolved<'a> {
+    name: &'a str,
+    descriptor: &'a str,
+}
+
+#[derive(Default)]
+pub(in crate::class_file) struct CPMethodrefResolved<'a> {
+    class: CPClassResolved<'a>,
+    name_and_type: CPNameAndTypeResolved<'a>,
 }
 
 /// Class/MethodRef/NameAndTypeが持つインデックスは、ConstantPool内の他のエントリへの参照。

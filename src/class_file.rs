@@ -6,11 +6,13 @@ mod attr;
 mod const_pool;
 
 use attr::{parse_attributes, Attribute, CodeAttr};
+use bitflags::bitflags;
 pub use const_pool::{CPInfo, ConstantPool};
 
 #[derive(Debug)]
 pub struct ClassFile {
     pub constant_pool: ConstantPool,
+    pub this_class: String,
     pub methods: Vec<MethodInfo>,
 }
 
@@ -30,8 +32,12 @@ impl ClassFile {
         // parse constant pool
         let cp = ConstantPool::parse(&mut bs)?;
 
-        // skip access_flags, this_class, super_class
-        bs.skip(6);
+        // skip access_flags
+        bs.skip(2);
+        // parse this_class
+        let this_class = parse_class_ref(&mut bs, &cp);
+        // skip super_class
+        bs.skip(2);
         // skip interfaces
         let ifaces_count = bs.read_u16() as usize;
         bs.skip(2 * ifaces_count);
@@ -46,6 +52,7 @@ impl ClassFile {
 
         Ok(ClassFile {
             constant_pool: cp,
+            this_class,
             methods,
         })
     }
@@ -60,9 +67,33 @@ impl ClassFile {
     }
 }
 
+fn parse_class_ref(bs: &mut ByteSeq, cp: &ConstantPool) -> String {
+    let idx = bs.read_u16();
+    let c = cp.get_class(idx);
+    c.name.to_string()
+}
+
+bitflags! {
+    #[derive(Debug)]
+    pub struct AccessFlags: u16 {
+        const PUBLIC = 0x0001;
+        const PRIVATE = 0x0002;
+        const PROTECTED = 0x0004;
+        const STATIC = 0x0008;
+        const FINAL = 0x0010;
+        const SYNCHRONIZED = 0x0020;
+        const BRIDGE = 0x0040;
+        const VARARGS = 0x0080;
+        const NATIVE = 0x0100;
+        const ABSTRACT =  0x0400;
+        const STRICT = 0x0800;
+        const SYNTHETIC = 0x1000;
+    }
+}
+
 #[derive(Debug)]
 struct FieldInfo {
-    access_flags: u16,
+    access_flags: AccessFlags,
     name: String,
     descriptor: String,
     attributes: Vec<Attribute>,
@@ -79,7 +110,7 @@ fn parse_fields(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<FieldInfo> {
 
 fn parse_field_info(bs: &mut ByteSeq, cp: &ConstantPool) -> FieldInfo {
     FieldInfo {
-        access_flags: bs.read_u16(),
+        access_flags: AccessFlags::from_bits_retain(bs.read_u16()),
         name: cp.get_utf8(bs.read_u16()).to_string(),
         descriptor: cp.get_utf8(bs.read_u16()).to_string(),
         attributes: parse_attributes(bs, cp),
@@ -88,7 +119,7 @@ fn parse_field_info(bs: &mut ByteSeq, cp: &ConstantPool) -> FieldInfo {
 
 #[derive(Debug)]
 pub struct MethodInfo {
-    access_flags: u16,
+    access_flags: AccessFlags,
     name: String,
     descriptor: String,
     attributes: Vec<Attribute>,
@@ -104,8 +135,30 @@ impl MethodInfo {
         None
     }
 
+    // TODO: refactor this
+    pub fn into_fields(self) -> (String, String, u16, u16, Vec<u8>) {
+        for attr in self.attributes.into_iter() {
+            if let Attribute::Code(c) = attr {
+                return (
+                    self.name,
+                    self.descriptor,
+                    c.max_stack,
+                    c.max_locals,
+                    c.code,
+                );
+            }
+        }
+        eprintln!("Code attr not found");
+        (String::new(), String::new(), 0, 0, Vec::new())
+    }
+
     pub fn num_args(&self) -> usize {
         self.descriptor[1..].find(')').expect("malformed signature")
+    }
+
+    pub fn is_static(&self) -> bool {
+        self.access_flags.contains(AccessFlags::STATIC)
+            && !self.access_flags.contains(AccessFlags::ABSTRACT)
     }
 }
 
@@ -126,7 +179,7 @@ fn parse_methods(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<MethodInfo> {
 
 fn parse_method_info(bs: &mut ByteSeq, cp: &ConstantPool) -> MethodInfo {
     MethodInfo {
-        access_flags: bs.read_u16(),
+        access_flags: AccessFlags::from_bits_retain(bs.read_u16()),
         name: cp.get_utf8(bs.read_u16()).to_string(),
         descriptor: cp.get_utf8(bs.read_u16()).to_string(),
         attributes: parse_attributes(bs, cp),
@@ -143,7 +196,7 @@ mod test {
 
         for (input, exp) in tests {
             let m = MethodInfo {
-                access_flags: 0,
+                access_flags: AccessFlags::from_bits_retain(0),
                 name: "".to_string(),
                 descriptor: input.to_string(),
                 attributes: vec![],
