@@ -1,4 +1,5 @@
 use super::class::{MethodSignature, RunTimeCPInfo as CPInfo};
+use super::frame::Frame;
 use super::method_area::MethodArea;
 use super::thread::Thread;
 use super::value::{Value, ValueCategory};
@@ -1000,6 +1001,7 @@ instr_return!(instr_return, void);
 fn instr_invokestatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
     let frame = t.current_frame();
 
+    // lookup methodref from const pool
     let idx = frame.next_param_u16();
     let CPInfo::Methodref {
         class_name,
@@ -1013,8 +1015,18 @@ fn instr_invokestatic(t: &mut Thread, meth_area: &mut MethodArea) -> Instruction
         Err("invoking method on another class is currently not supported")?
     }
 
-    let class_name = class_name.clone();
+    // lookup method to be called
     let sig = MethodSignature::new(name, descriptor);
+    let Some((cls, meth)) = meth_area.lookup_static_method(class_name, &sig) else {
+        return Err(format!("static method '{class_name}.{sig}' not found"))?;
+    };
+    let num_args = meth.num_args();
 
-    t.invoke_static_method(meth_area, &class_name, &sig)
+    // method call
+    // create new frame for the method, transfer args to the frame, then push onto frame stack
+    let mut callee_frame = Frame::new(cls, meth);
+    Frame::transfer_args(frame, &mut callee_frame, num_args);
+    t.push_frame(callee_frame);
+
+    Ok(())
 }

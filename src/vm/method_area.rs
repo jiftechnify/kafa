@@ -30,8 +30,8 @@ impl MethodArea {
         &mut self,
         class_name: &str,
         signature: &MethodSignature,
-    ) -> Option<Method> {
+    ) -> Option<(Rc<Class>, Method)> {
         self.lookup_class(class_name)
-            .and_then(|cls| cls.lookup_static_method(signature))
+            .and_then(|cls| cls.lookup_static_method(signature).map(|meth| (cls, meth)))
     }
 }
