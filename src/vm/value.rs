@@ -24,15 +24,3 @@ impl Value {
         }
     }
 }
-
-pub enum ValueType {
-    Byte,
-    Short,
-    Int,
-    Long,
-    Char,
-    Float,
-    Double,
-    Reference,
-    ReturnAddress,
-}
