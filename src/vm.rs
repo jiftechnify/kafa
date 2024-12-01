@@ -50,8 +50,13 @@ impl VM {
         let cls_name = cls.name.clone();
         let mut meth_area = MethodArea::with_class(cls);
 
-        let sig = MethodSignature::new(method_name, method_desc);
+        // initialize class
+        let sig_clinit = MethodSignature::new("<clinit>", "()V");
+        let _ = self
+            .thread
+            .exec_bootstrap_method(&mut meth_area, &cls_name, &sig_clinit);
 
+        let sig = MethodSignature::new(method_name, method_desc);
         self.thread
             .exec_bootstrap_method(&mut meth_area, &cls_name, &sig)?;
 
