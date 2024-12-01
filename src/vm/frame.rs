@@ -74,7 +74,7 @@ impl Frame {
         self.code.read_u16()
     }
 
-    pub fn next_params_u32(&mut self) -> u32 {
+    pub fn next_param_u32(&mut self) -> u32 {
         self.code.read_u32()
     }
 

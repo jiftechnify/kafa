@@ -822,7 +822,7 @@ macro_rules! instr_if_cond {
         fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
             let frame = t.current_frame();
 
-            let pc_delta = frame.next_param_u16() as i32;
+            let pc_delta = frame.next_param_u16() as i16 as i32;
             let Value::Int(v) = frame.pop_operand() else {
                 return Err("target operand is not type 'int'".into());
             };
@@ -851,7 +851,7 @@ macro_rules! instr_cmp_cond {
         fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
             let frame = t.current_frame();
 
-            let pc_delta = frame.next_param_u16() as i32;
+            let pc_delta = frame.next_param_u16() as i16 as i32;
             let $vtype(rhs) = frame.pop_operand() else {
                 return Err(concat!("target operand is not type '", $vtype_name, "'").into());
             };
@@ -892,7 +892,7 @@ fn instr_goto(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 fn instr_jsr(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     let frame = t.current_frame();
 
-    let pc_delta = frame.next_param_u16() as i32;
+    let pc_delta = frame.next_param_u16() as i16 as i32;
     let jmp_dest = (frame.get_pc() as i32 + pc_delta) as u32;
     frame.push_operand(Value::ReturnAddress(frame.get_pc() + 3)); // next instruction is 3 bytes ahead from jsr
     frame.jump_pc(jmp_dest);
@@ -915,9 +915,9 @@ fn instr_tableswitch(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     let frame = t.current_frame();
 
     frame.skip_code_padding(4);
-    let default = frame.next_params_u32() as i32;
-    let low = frame.next_params_u32() as i32;
-    let high = frame.next_params_u32() as i32;
+    let default = frame.next_param_u32() as i32;
+    let low = frame.next_param_u32() as i32;
+    let high = frame.next_param_u32() as i32;
 
     let Value::Int(idx) = frame.pop_operand() else {
         return Err("target operand is not type 'int'".into());
@@ -928,9 +928,9 @@ fn instr_tableswitch(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
         let i = idx - low;
         assert!(i >= 0);
         for _ in 0..i {
-            frame.next_params_u32();
+            frame.next_param_u32();
         }
-        frame.next_params_u32() as i32
+        frame.next_param_u32() as i32
     };
 
     let jmp_dest = (frame.get_pc() as i32 + offset) as u32;
@@ -942,8 +942,8 @@ fn instr_lookupswitch(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     let frame = t.current_frame();
 
     frame.skip_code_padding(4);
-    let default = frame.next_params_u32() as i32;
-    let n_pairs = frame.next_params_u32() as usize;
+    let default = frame.next_param_u32() as i32;
+    let n_pairs = frame.next_param_u32() as usize;
 
     let Value::Int(key) = frame.pop_operand() else {
         return Err("target operand is not type 'int'".into());
@@ -956,8 +956,8 @@ fn instr_lookupswitch(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
                 break default;
             }
 
-            let match_key = frame.next_params_u32() as i32;
-            let offset = frame.next_params_u32() as i32;
+            let match_key = frame.next_param_u32() as i32;
+            let offset = frame.next_param_u32() as i32;
             if key == match_key {
                 break offset;
             }
