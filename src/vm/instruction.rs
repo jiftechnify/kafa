@@ -181,9 +181,9 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x9F => instr_if_icmpeq,
     0xA0 => instr_if_icmpne,
     0xA1 => instr_if_icmplt,
-    0xA2 => instr_if_icmple,
+    0xA2 => instr_if_icmpge,
     0xA3 => instr_if_icmpgt,
-    0xA4 => instr_if_icmpge,
+    0xA4 => instr_if_icmple,
     0xA5 => instr_if_acmpeq,
     0xA6 => instr_if_acmpne,
 
