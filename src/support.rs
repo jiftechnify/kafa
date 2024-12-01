@@ -14,6 +14,12 @@ impl ByteSeq {
         Ok(ByteSeq { buf, i: 0 })
     }
 
+    pub fn from_bytes(bytes: Vec<u8>) -> Self {
+        ByteSeq { buf: bytes, i: 0 }
+    }
+}
+
+impl ByteSeq {
     pub fn skip(&mut self, n: usize) {
         self.i += n;
     }

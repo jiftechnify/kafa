@@ -4,11 +4,19 @@ mod class_file;
 mod support;
 mod vm;
 
+use std::error::Error;
+
 use vm::{Value, VM};
 
 fn main() {
     let mut vm = VM::new();
-    let res = vm.execute("res/MakeJVM.class", "compute", "(I)I", &[Value::Int(10)]);
+
+    print_result(vm.execute("res/MakeJVM.class", "start", "()I", &[]));
+    print_result(vm.execute("res/MakeJVM.class", "start2", "()I", &[]));
+    print_result(vm.execute("res/MakeJVM.class", "start3", "()Z", &[]));
+}
+
+fn print_result(res: Result<Value, Box<dyn Error>>) {
     match res {
         Ok(v) => {
             println!("return value: {v:?}");

@@ -1,26 +1,29 @@
-use super::value::Value;
-use crate::{
-    class_file::{CPInfo, ConstantPool, MethodInfo},
-    support::ByteSeq,
+use std::rc::Rc;
+
+use super::{
+    class::{Class, Method, MethodSignature, RunTimeCPInfo},
+    value::Value,
 };
+use crate::support::ByteSeq;
 
 pub struct Frame {
     locals: Vec<Option<Value>>,
     op_stack: Vec<Value>,
-    const_pool: ConstantPool,
+    class: Rc<Class>,
+    meth_sig: MethodSignature,
     code: ByteSeq,
     pc: u32,
 }
 
 impl Frame {
-    pub fn new(const_pool: ConstantPool, method: &MethodInfo) -> Frame {
-        let code_attr = method.get_code_attr().expect("method must have code attr");
-        let code_reader = ByteSeq::new(code_attr.code.as_slice()).unwrap();
+    pub fn new(class: Rc<Class>, method: Method) -> Frame {
+        let code_reader = ByteSeq::from_bytes(method.code);
 
         Frame {
-            locals: vec![Option::default(); code_attr.max_locals as usize],
-            op_stack: Vec::with_capacity(code_attr.max_stack as usize),
-            const_pool,
+            locals: vec![Option::default(); method.max_locals as usize],
+            op_stack: Vec::with_capacity(method.max_stack as usize),
+            class,
+            meth_sig: method.signature,
             code: code_reader,
             pc: 0,
         }
@@ -30,7 +33,8 @@ impl Frame {
         Frame {
             locals: Vec::new(),
             op_stack: Vec::new(),
-            const_pool: ConstantPool::empty(),
+            class: Rc::new(Class::dummy()),
+            meth_sig: Default::default(),
             code: ByteSeq::new(vec![].as_slice()).unwrap(),
             pc: 0,
         }
@@ -138,8 +142,16 @@ impl Frame {
         );
     }
 
-    pub fn get_cp_info(&self, idx: u16) -> &CPInfo {
-        self.const_pool.get_info(idx)
+    pub fn get_cp_info(&self, idx: u16) -> &RunTimeCPInfo {
+        self.class.get_cp_info(idx)
+    }
+
+    pub fn get_class(&self) -> Rc<Class> {
+        self.class.clone()
+    }
+
+    pub fn executing_method_info(&self) -> String {
+        format!("{}.{}", self.class.name, self.meth_sig)
     }
 }
 

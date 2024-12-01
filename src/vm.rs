@@ -1,12 +1,16 @@
-use std::{fs::File, path::Path};
+use std::{fs::File, path::Path, rc::Rc};
 
+use class::{Class, MethodSignature};
 use frame::Frame;
+use method_area::MethodArea;
 use thread::Thread;
 
 use crate::class_file::ClassFile;
 
+mod class;
 mod frame;
 mod instruction;
+mod method_area;
 mod thread;
 mod value;
 
@@ -42,14 +46,17 @@ impl VM {
         }
         self.thread.push_frame(init_frame);
 
-        let method = cls_file
-            .find_method(method_name, method_desc)
-            .ok_or_else(|| format!("method not found (name={method_name}, desc={method_desc})"))?;
+        let cls = Rc::new(Class::from_class_file(cls_file));
+        let cls_name = cls.name.clone();
+        let mut meth_area = MethodArea::with_class(cls);
+
+        let sig = MethodSignature::new(method_name, method_desc);
 
         self.thread
-            .exec_method(cls_file.constant_pool.clone(), method)?;
+            .invoke_static_method(&mut meth_area, &cls_name, &sig)?;
 
         let res = self.thread.current_frame().pop_operand();
+        self.thread.pop_frame();
         Ok(res)
     }
 }
