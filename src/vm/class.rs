@@ -1,4 +1,4 @@
-use std::{cell::Cell, collections::HashMap};
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 
 use crate::class_file::{CPInfo, ConstantPool};
 
@@ -81,11 +81,11 @@ impl std::fmt::Display for FieldDescriptor {
 }
 
 #[derive(Clone)]
-pub struct FieldValue(Cell<Value>);
+pub struct FieldValue(Rc<Cell<Value>>);
 
 impl FieldValue {
     fn from_val(val: Value) -> Self {
-        FieldValue(Cell::new(val))
+        FieldValue(Rc::new(Cell::new(val)))
     }
 
     fn from_cp_info(cp_info: &CPInfo) -> Self {
