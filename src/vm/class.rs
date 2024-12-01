@@ -54,6 +54,14 @@ impl Class {
     }
 }
 
+pub struct FieldDescriptor(String);
+
+impl std::fmt::Display for FieldDescriptor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct MethodDescriptor(String);
 
@@ -122,6 +130,11 @@ pub enum RunTimeCPInfo {
         name: String,
     },
     String(String),
+    Fieldref {
+        class_name: String,
+        name: String,
+        descriptor: String,
+    },
     Methodref {
         class_name: String,
         name: String,
@@ -150,6 +163,10 @@ impl RunTimeConstantPool {
                     name: cp.get_utf8(*name_idx).to_string(),
                 },
                 CPInfo::String { string_idx } => String(cp.get_utf8(*string_idx).to_string()),
+                CPInfo::Fieldref {
+                    class_idx,
+                    name_and_type_idx,
+                } => resolve_fieldref(&cp, *class_idx, *name_and_type_idx),
                 CPInfo::Methodref {
                     class_idx,
                     name_and_type_idx,
@@ -177,14 +194,55 @@ impl RunTimeConstantPool {
     }
 }
 
-fn resolve_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPInfo {
-    let &CPInfo::Class { name_idx } = cp.get_info(cls_idx) else {
-        eprintln!("failed to resolve methodref");
+fn resolve_fieldref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPInfo {
+    let Some(ConstPoolRef {
+        class_name,
+        name,
+        descriptor,
+    }) = resolve_const_pool_ref(cp, cls_idx, nt_idx)
+    else {
         return RunTimeCPInfo::Methodref {
             class_name: String::new(),
             name: String::new(),
             descriptor: String::new(),
         };
+    };
+    RunTimeCPInfo::Fieldref {
+        class_name,
+        name,
+        descriptor,
+    }
+}
+
+fn resolve_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPInfo {
+    let Some(ConstPoolRef {
+        class_name,
+        name,
+        descriptor,
+    }) = resolve_const_pool_ref(cp, cls_idx, nt_idx)
+    else {
+        return RunTimeCPInfo::Methodref {
+            class_name: String::new(),
+            name: String::new(),
+            descriptor: String::new(),
+        };
+    };
+    RunTimeCPInfo::Methodref {
+        class_name,
+        name,
+        descriptor,
+    }
+}
+
+struct ConstPoolRef {
+    class_name: String,
+    name: String,
+    descriptor: String,
+}
+fn resolve_const_pool_ref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> Option<ConstPoolRef> {
+    let &CPInfo::Class { name_idx } = cp.get_info(cls_idx) else {
+        eprintln!("failed to resolve methodref");
+        return None;
     };
     let class_name = cp.get_utf8(name_idx).to_string();
 
@@ -194,18 +252,14 @@ fn resolve_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPI
     } = cp.get_info(nt_idx)
     else {
         eprintln!("failed to resolve methodref");
-        return RunTimeCPInfo::Methodref {
-            class_name: String::new(),
-            name: String::new(),
-            descriptor: String::new(),
-        };
+        return None;
     };
     let name = cp.get_utf8(name_idx).to_string();
     let descriptor = cp.get_utf8(descriptor_idx).to_string();
 
-    RunTimeCPInfo::Methodref {
+    Some(ConstPoolRef {
         class_name,
         name,
         descriptor,
-    }
+    })
 }

@@ -90,6 +90,12 @@ pub(in crate::class_file) struct CPNameAndTypeResolved<'a> {
 }
 
 #[derive(Default)]
+pub(in crate::class_file) struct CPFieldrefResolved<'a> {
+    class: CPClassResolved<'a>,
+    name_and_type: CPNameAndTypeResolved<'a>,
+}
+
+#[derive(Default)]
 pub(in crate::class_file) struct CPMethodrefResolved<'a> {
     class: CPClassResolved<'a>,
     name_and_type: CPNameAndTypeResolved<'a>,
@@ -109,6 +115,10 @@ pub enum CPInfo {
     },
     String {
         string_idx: u16,
+    },
+    Fieldref {
+        class_idx: u16,
+        name_and_type_idx: u16,
     },
     Methodref {
         class_idx: u16,
@@ -157,6 +167,11 @@ fn parse_cp_info(bs: &mut ByteSeq) -> Result<CPInfo, Box<dyn std::error::Error +
         // CONSTANT_String
         8 => CPInfo::String {
             string_idx: bs.read_u16(),
+        },
+        // CONSTANT_Fieldref
+        9 => CPInfo::Fieldref {
+            class_idx: bs.read_u16(),
+            name_and_type_idx: bs.read_u16(),
         },
         // CONSTANT_Methodref
         10 => CPInfo::Methodref {
