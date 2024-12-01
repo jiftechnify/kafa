@@ -53,7 +53,7 @@ impl VM {
         let sig = MethodSignature::new(method_name, method_desc);
 
         self.thread
-            .invoke_static_method(&mut meth_area, &cls_name, &sig)?;
+            .exec_bootstrap_method(&mut meth_area, &cls_name, &sig)?;
 
         let res = self.thread.current_frame().pop_operand();
         self.thread.pop_frame();

@@ -25,14 +25,12 @@ impl Thread {
             .expect("no frame belongs to the thread")
     }
 
-    pub fn invoke_static_method(
+    pub fn exec_bootstrap_method(
         &mut self,
         meth_area: &mut MethodArea,
         class_name: &str,
         sig: &MethodSignature,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let caller_depth = self.frames.len();
-
         let caller = self.current_frame();
 
         // lookup method to be called
@@ -51,11 +49,10 @@ impl Thread {
         // switch to the callee frame
         self.push_frame(callee);
 
-        // execute instructions until return
+        // execute instructions until end of program
         loop {
-            // check if returned from the method called
-            let curr_frame_depth = self.frames.len();
-            if caller_depth == curr_frame_depth {
+            if self.frames.len() == 1 {
+                // returned to bootstrap frame -> program finished!
                 break;
             }
             exec_instr(self, meth_area)?;
