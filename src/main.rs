@@ -14,6 +14,8 @@ fn main() {
     print_result(vm.execute("res/MakeJVM.class", "start", "()I", &[]));
     print_result(vm.execute("res/MakeJVM.class", "start2", "()I", &[]));
     print_result(vm.execute("res/MakeJVM.class", "start3", "()Z", &[]));
+
+    print_result(vm.execute("res/StaticFieldsSample.class", "start", "()I", &[]));
 }
 
 fn print_result(res: Result<Value, Box<dyn Error>>) {
