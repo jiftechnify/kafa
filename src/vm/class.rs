@@ -133,7 +133,11 @@ impl FieldValue {
 }
 
 impl FieldValue {
-    fn set(&self, new_val: Value) {
+    pub fn get(&self) -> Value {
+        self.0.get()
+    }
+
+    pub fn put(&self, new_val: Value) {
         self.0.set(new_val);
     }
 }

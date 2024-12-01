@@ -200,6 +200,8 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0xB1 => instr_return,
 
     // TODO: implement instructions for reference type values
+    0xB2 => instr_getstatic,
+    0xB3 => instr_putstatic,
     0xB8 => instr_invokestatic,
 };
 
@@ -997,6 +999,52 @@ instr_return!(instr_freturn, Value::Float, "float");
 instr_return!(instr_dreturn, Value::Double, "double");
 instr_return!(instr_areturn, Value::Reference, "reference");
 instr_return!(instr_return, void);
+
+// get a value of a static field
+fn instr_getstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
+    let frame = t.current_frame();
+
+    let idx = frame.next_param_u16();
+    let CPInfo::Fieldref {
+        class_name, name, ..
+    } = frame.get_cp_info(idx)
+    else {
+        return Err("invalid fieldref")?;
+    };
+    if *class_name != frame.get_class().name {
+        Err("getting field on another class is currently not supported")?
+    }
+
+    let Some(fv) = meth_area.lookup_static_field(class_name, name) else {
+        return Err(format!("static field '{class_name}.{name}' not found"))?;
+    };
+    frame.push_operand(fv.get());
+    Ok(())
+}
+
+// put a value to a static field
+fn instr_putstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
+    let frame = t.current_frame();
+
+    let idx = frame.next_param_u16();
+    let CPInfo::Fieldref {
+        class_name, name, ..
+    } = frame.get_cp_info(idx)
+    else {
+        return Err("invalid fieldref")?;
+    };
+    if *class_name != frame.get_class().name {
+        Err("getting field on another class is currently not supported")?
+    }
+
+    let Some(fv) = meth_area.lookup_static_field(class_name, name) else {
+        return Err(format!("static field '{class_name}.{name}' not found"))?;
+    };
+
+    let v = frame.pop_operand();
+    fv.put(v);
+    Ok(())
+}
 
 fn instr_invokestatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
     let frame = t.current_frame();

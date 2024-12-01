@@ -26,13 +26,9 @@ impl MethodArea {
         self.classes.get(class_name).cloned()
     }
 
-    pub fn lookup_static_field(
-        &mut self,
-        class_name: &str,
-        name: &str,
-    ) -> Option<(Rc<Class>, FieldValue)> {
+    pub fn lookup_static_field(&mut self, class_name: &str, name: &str) -> Option<FieldValue> {
         self.lookup_class(class_name)
-            .and_then(|cls| cls.lookup_static_field(name).map(|fv| (cls, fv)))
+            .and_then(|cls| cls.lookup_static_field(name))
     }
 
     pub fn lookup_static_method(
