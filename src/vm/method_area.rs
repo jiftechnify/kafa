@@ -49,7 +49,7 @@ impl MethodArea {
         &mut self,
         class_name: &str,
         name: &str,
-    ) -> Result<FieldValue, Box<dyn std::error::Error>> {
+    ) -> Result<Rc<FieldValue>, Box<dyn std::error::Error>> {
         self.lookup_class(class_name).and_then(|cls| {
             cls.lookup_static_field(name)
                 .ok_or_else(|| "static field '{class_name}.{name}' not found".into())
@@ -60,7 +60,7 @@ impl MethodArea {
         &mut self,
         class_name: &str,
         sig: &MethodSignature,
-    ) -> Result<(Rc<Class>, Method), Box<dyn std::error::Error>> {
+    ) -> Result<(Rc<Class>, Rc<Method>), Box<dyn std::error::Error>> {
         self.lookup_class(class_name).and_then(|cls| {
             cls.lookup_static_method(sig)
                 .map(|meth| (cls, meth))

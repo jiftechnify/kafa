@@ -7,8 +7,8 @@ use super::Value;
 pub struct Class {
     pub name: String,
     const_pool: RunTimeConstantPool,
-    static_fields: HashMap<String, FieldValue>,
-    static_methods: HashMap<MethodSignature, Method>,
+    static_fields: HashMap<String, Rc<FieldValue>>,
+    static_methods: HashMap<MethodSignature, Rc<Method>>,
 }
 
 impl Class {
@@ -21,6 +21,7 @@ impl Class {
                 Some(cp_info) => FieldValue::from_cp_info(cp_info),
                 None => FieldValue::default_val_of_type(&f.descriptor),
             };
+            let fv = Rc::new(fv);
             static_fields.insert(f.name, fv);
         }
 
@@ -37,6 +38,7 @@ impl Class {
                 max_locals,
                 code,
             };
+            let method = Rc::new(method);
             static_methods.insert(sig, method);
         }
 
@@ -59,11 +61,11 @@ impl Class {
 }
 
 impl Class {
-    pub fn lookup_static_field(&self, name: &str) -> Option<FieldValue> {
+    pub fn lookup_static_field(&self, name: &str) -> Option<Rc<FieldValue>> {
         self.static_fields.get(name).cloned()
     }
 
-    pub fn lookup_static_method(&self, signature: &MethodSignature) -> Option<Method> {
+    pub fn lookup_static_method(&self, signature: &MethodSignature) -> Option<Rc<Method>> {
         self.static_methods.get(signature).cloned()
     }
 
@@ -80,12 +82,11 @@ impl std::fmt::Display for FieldDescriptor {
     }
 }
 
-#[derive(Clone)]
-pub struct FieldValue(Rc<Cell<Value>>);
+pub struct FieldValue(Cell<Value>);
 
 impl FieldValue {
     fn from_val(val: Value) -> Self {
-        FieldValue(Rc::new(Cell::new(val)))
+        FieldValue(Cell::new(val))
     }
 
     fn from_cp_info(cp_info: &CPInfo) -> Self {

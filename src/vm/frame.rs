@@ -16,14 +16,14 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn new(class: Rc<Class>, method: Method) -> Frame {
-        let code_reader = ByteSeq::from_bytes(method.code);
+    pub fn new(class: Rc<Class>, method: Rc<Method>) -> Frame {
+        let code_reader = ByteSeq::new(method.code.as_slice()).unwrap();
 
         Frame {
             locals: vec![Option::default(); method.max_locals as usize],
             op_stack: Vec::with_capacity(method.max_stack as usize),
             class,
-            meth_sig: method.signature,
+            meth_sig: method.signature.clone(),
             code: code_reader,
             pc: 0,
         }
