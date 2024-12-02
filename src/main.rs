@@ -9,13 +9,18 @@ use std::error::Error;
 use vm::{Value, VM};
 
 fn main() {
-    let mut vm = VM::new();
+    let Some(cp) = std::env::var_os("KAFA_CLASS_PATH") else {
+        eprintln!("environment variable KAFA_CLASS_PATH is not defined");
+        return;
+    };
 
-    print_result(vm.execute("res/MakeJVM.class", "start", "()I", &[]));
-    print_result(vm.execute("res/MakeJVM.class", "start2", "()I", &[]));
-    print_result(vm.execute("res/MakeJVM.class", "start3", "()Z", &[]));
+    let mut vm = VM::new(&cp);
 
-    print_result(vm.execute("res/StaticFieldsSample.class", "start", "()I", &[]));
+    print_result(vm.execute("MakeJVM", "start", "()I", &[]));
+    print_result(vm.execute("MakeJVM", "start2", "()I", &[]));
+    print_result(vm.execute("MakeJVM", "start3", "()Z", &[]));
+
+    print_result(vm.execute("StaticFieldsSample", "start", "()I", &[]));
 }
 
 fn print_result(res: Result<Value, Box<dyn Error>>) {

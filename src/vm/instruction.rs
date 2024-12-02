@@ -1015,10 +1015,8 @@ fn instr_getstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionRes
         Err("getting field on another class is currently not supported")?
     }
 
-    let Some(fv) = meth_area.lookup_static_field(class_name, name) else {
-        return Err(format!("static field '{class_name}.{name}' not found"))?;
-    };
-    frame.push_operand(fv.get());
+    let field = meth_area.lookup_static_field(class_name, name)?;
+    frame.push_operand(field.get());
     Ok(())
 }
 
@@ -1037,12 +1035,8 @@ fn instr_putstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionRes
         Err("getting field on another class is currently not supported")?
     }
 
-    let Some(fv) = meth_area.lookup_static_field(class_name, name) else {
-        return Err(format!("static field '{class_name}.{name}' not found"))?;
-    };
-
-    let v = frame.pop_operand();
-    fv.put(v);
+    let field = meth_area.lookup_static_field(class_name, name)?;
+    field.put(frame.pop_operand());
     Ok(())
 }
 
@@ -1059,15 +1053,10 @@ fn instr_invokestatic(t: &mut Thread, meth_area: &mut MethodArea) -> Instruction
     else {
         return Err("invalid methodref")?;
     };
-    if *class_name != frame.get_class().name {
-        Err("invoking method on another class is currently not supported")?
-    }
 
     // lookup method to be called
     let sig = MethodSignature::new(name, descriptor);
-    let Some((cls, meth)) = meth_area.lookup_static_method(class_name, &sig) else {
-        return Err(format!("static method '{class_name}.{sig}' not found"))?;
-    };
+    let (cls, meth) = meth_area.lookup_static_method(class_name, &sig)?;
     let num_args = meth.num_args();
 
     // method call
