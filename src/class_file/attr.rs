@@ -28,7 +28,6 @@ pub fn parse_attributes(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<Attribute> {
                 Attribute::Code(code_attr)
             }
             _ => {
-                eprintln!("skipping unsupported attribute: {}", name);
                 bs.skip(len);
                 Attribute::Unsupported
             }

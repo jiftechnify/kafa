@@ -13,6 +13,7 @@ fn main() {
         eprintln!("environment variable KAFA_CLASS_PATH is not defined");
         return;
     };
+    println!("class path: {cp:?}");
 
     let mut vm = VM::new(&cp);
 

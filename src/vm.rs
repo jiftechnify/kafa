@@ -39,6 +39,8 @@ impl VM {
         method_desc: &str,
         args: &[Value],
     ) -> Result<Value, Box<dyn std::error::Error>> {
+        println!("executing {class_name}.{method_name}:{method_desc} with args: {args:?}");
+
         let cls_loader = ClassLoader::new(&self.class_path);
         let mut meth_area = MethodArea::new(cls_loader);
 
