@@ -13,6 +13,7 @@ pub use const_pool::{CPInfo, ConstantPool};
 pub struct ClassFile {
     pub constant_pool: ConstantPool,
     pub this_class: String,
+    pub fields: Vec<FieldInfo>,
     pub methods: Vec<MethodInfo>,
 }
 
@@ -42,10 +43,8 @@ impl ClassFile {
         let ifaces_count = bs.read_u16() as usize;
         bs.skip(2 * ifaces_count);
 
-        // skip fields
-        let _ = parse_fields(&mut bs, &cp);
-
-        // parse methods
+        // parse fields and methods
+        let fields = parse_fields(&mut bs, &cp);
         let methods = parse_methods(&mut bs, &cp);
 
         // skip attributes
@@ -53,6 +52,7 @@ impl ClassFile {
         Ok(ClassFile {
             constant_pool: cp,
             this_class,
+            fields,
             methods,
         })
     }
@@ -75,7 +75,63 @@ fn parse_class_ref(bs: &mut ByteSeq, cp: &ConstantPool) -> String {
 
 bitflags! {
     #[derive(Debug)]
-    pub struct AccessFlags: u16 {
+    pub struct FieldAccessFlags: u16 {
+        const PUBLIC = 0x0001;
+        const PRIVATE = 0x0002;
+        const PROTECTED = 0x0004;
+        const STATIC = 0x0008;
+        const FINAL = 0x0010;
+        const VOLATILE = 0x0040;
+        const TRANSIENT = 0x0080;
+        const SYNTHETIC = 0x1000;
+        const ENUM = 0x4000;
+    }
+}
+
+#[derive(Debug)]
+pub struct FieldInfo {
+    access_flags: FieldAccessFlags,
+    pub name: String,
+    pub descriptor: String,
+    attributes: Vec<Attribute>,
+}
+
+impl FieldInfo {
+    pub fn get_const_val(&self) -> Option<&CPInfo> {
+        for attr in self.attributes.iter() {
+            if let Attribute::ConstantValue(const_val_attr) = attr {
+                return Some(&const_val_attr.const_value);
+            }
+        }
+        None
+    }
+
+    pub fn is_static(&self) -> bool {
+        self.access_flags.contains(FieldAccessFlags::STATIC)
+    }
+}
+
+fn parse_fields(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<FieldInfo> {
+    let count = bs.read_u16() as usize;
+    let mut vec = Vec::with_capacity(count);
+    for _ in 0..count {
+        vec.push(parse_field_info(bs, cp));
+    }
+    vec
+}
+
+fn parse_field_info(bs: &mut ByteSeq, cp: &ConstantPool) -> FieldInfo {
+    FieldInfo {
+        access_flags: FieldAccessFlags::from_bits_retain(bs.read_u16()),
+        name: cp.get_utf8(bs.read_u16()).to_string(),
+        descriptor: cp.get_utf8(bs.read_u16()).to_string(),
+        attributes: parse_attributes(bs, cp),
+    }
+}
+
+bitflags! {
+    #[derive(Debug)]
+    pub struct MethodAccessFlags: u16 {
         const PUBLIC = 0x0001;
         const PRIVATE = 0x0002;
         const PROTECTED = 0x0004;
@@ -92,34 +148,8 @@ bitflags! {
 }
 
 #[derive(Debug)]
-struct FieldInfo {
-    access_flags: AccessFlags,
-    name: String,
-    descriptor: String,
-    attributes: Vec<Attribute>,
-}
-
-fn parse_fields(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<FieldInfo> {
-    let count = bs.read_u16() as usize;
-    let mut vec = Vec::with_capacity(count);
-    for _ in 0..count {
-        vec.push(parse_field_info(bs, cp));
-    }
-    vec
-}
-
-fn parse_field_info(bs: &mut ByteSeq, cp: &ConstantPool) -> FieldInfo {
-    FieldInfo {
-        access_flags: AccessFlags::from_bits_retain(bs.read_u16()),
-        name: cp.get_utf8(bs.read_u16()).to_string(),
-        descriptor: cp.get_utf8(bs.read_u16()).to_string(),
-        attributes: parse_attributes(bs, cp),
-    }
-}
-
-#[derive(Debug)]
 pub struct MethodInfo {
-    access_flags: AccessFlags,
+    access_flags: MethodAccessFlags,
     name: String,
     descriptor: String,
     attributes: Vec<Attribute>,
@@ -136,7 +166,7 @@ impl MethodInfo {
     }
 
     // TODO: refactor this
-    pub fn into_fields(self) -> (String, String, u16, u16, Vec<u8>) {
+    pub fn into_components(self) -> (String, String, u16, u16, Vec<u8>) {
         for attr in self.attributes.into_iter() {
             if let Attribute::Code(c) = attr {
                 return (
@@ -157,8 +187,8 @@ impl MethodInfo {
     }
 
     pub fn is_static(&self) -> bool {
-        self.access_flags.contains(AccessFlags::STATIC)
-            && !self.access_flags.contains(AccessFlags::ABSTRACT)
+        self.access_flags.contains(MethodAccessFlags::STATIC)
+            && !self.access_flags.contains(MethodAccessFlags::ABSTRACT)
     }
 }
 
@@ -179,7 +209,7 @@ fn parse_methods(bs: &mut ByteSeq, cp: &ConstantPool) -> Vec<MethodInfo> {
 
 fn parse_method_info(bs: &mut ByteSeq, cp: &ConstantPool) -> MethodInfo {
     MethodInfo {
-        access_flags: AccessFlags::from_bits_retain(bs.read_u16()),
+        access_flags: MethodAccessFlags::from_bits_retain(bs.read_u16()),
         name: cp.get_utf8(bs.read_u16()).to_string(),
         descriptor: cp.get_utf8(bs.read_u16()).to_string(),
         attributes: parse_attributes(bs, cp),
@@ -196,7 +226,7 @@ mod test {
 
         for (input, exp) in tests {
             let m = MethodInfo {
-                access_flags: AccessFlags::from_bits_retain(0),
+                access_flags: MethodAccessFlags::from_bits_retain(0),
                 name: "".to_string(),
                 descriptor: input.to_string(),
                 attributes: vec![],

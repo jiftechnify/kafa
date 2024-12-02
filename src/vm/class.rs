@@ -1,10 +1,13 @@
-use std::collections::HashMap;
+use std::{cell::Cell, collections::HashMap, rc::Rc};
 
 use crate::class_file::{CPInfo, ConstantPool};
+
+use super::Value;
 
 pub struct Class {
     pub name: String,
     const_pool: RunTimeConstantPool,
+    static_fields: HashMap<String, FieldValue>,
     static_methods: HashMap<MethodSignature, Method>,
 }
 
@@ -12,9 +15,18 @@ impl Class {
     pub fn from_class_file(cls_file: crate::class_file::ClassFile) -> Class {
         let rtcp = RunTimeConstantPool::from_class_file_cp(cls_file.constant_pool);
 
+        let mut static_fields = HashMap::new();
+        for f in cls_file.fields.into_iter().filter(|f| f.is_static()) {
+            let fv = match f.get_const_val() {
+                Some(cp_info) => FieldValue::from_cp_info(cp_info),
+                None => FieldValue::default_val_of_type(&f.descriptor),
+            };
+            static_fields.insert(f.name, fv);
+        }
+
         let mut static_methods = HashMap::new();
         for m in cls_file.methods.into_iter().filter(|m| m.is_static()) {
-            let (name, desc, max_stack, max_locals, code) = m.into_fields();
+            let (name, desc, max_stack, max_locals, code) = m.into_components();
             let sig = MethodSignature {
                 name,
                 descriptor: MethodDescriptor(desc),
@@ -31,6 +43,7 @@ impl Class {
         Class {
             name: cls_file.this_class,
             const_pool: rtcp,
+            static_fields,
             static_methods,
         }
     }
@@ -39,18 +52,93 @@ impl Class {
         Class {
             name: "dummy".to_string(),
             const_pool: RunTimeConstantPool::empty(),
+            static_fields: HashMap::new(),
             static_methods: HashMap::new(),
         }
     }
 }
 
 impl Class {
+    pub fn lookup_static_field(&self, name: &str) -> Option<FieldValue> {
+        self.static_fields.get(name).cloned()
+    }
+
     pub fn lookup_static_method(&self, signature: &MethodSignature) -> Option<Method> {
         self.static_methods.get(signature).cloned()
     }
 
     pub fn get_cp_info(&self, idx: u16) -> &RunTimeCPInfo {
         self.const_pool.get_info(idx)
+    }
+}
+
+pub struct FieldDescriptor(String);
+
+impl std::fmt::Display for FieldDescriptor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+#[derive(Clone)]
+pub struct FieldValue(Rc<Cell<Value>>);
+
+impl FieldValue {
+    fn from_val(val: Value) -> Self {
+        FieldValue(Rc::new(Cell::new(val)))
+    }
+
+    fn from_cp_info(cp_info: &CPInfo) -> Self {
+        use CPInfo::*;
+        let val = match cp_info {
+            Integer(i) => Value::Int(*i),
+            Float(f) => Value::Float(*f),
+            Long(l) => Value::Long(*l),
+            Double(d) => Value::Double(*d),
+            String { .. } => {
+                eprintln!("string constant is not supported");
+                Value::Reference(0) // null
+            }
+            _ => {
+                eprintln!("not a constant value");
+                Value::Reference(0) // null
+            }
+        };
+        FieldValue::from_val(val)
+    }
+
+    fn default_val_of_type(desc: &str) -> Self {
+        assert!(!desc.is_empty());
+        let Some(fst_char) = desc.chars().nth(0) else {
+            unreachable!()
+        };
+        let default_val = match fst_char {
+            'B' => Value::Byte(0),
+            'C' => Value::Char(0),
+            'D' => Value::Double(0.0),
+            'F' => Value::Float(0.0),
+            'I' => Value::Int(0),
+            'J' => Value::Long(0),
+            'L' => Value::Reference(0), // null
+            'S' => Value::Short(0),
+            // 'Z' -> boolean
+            // the Java programming language that operate on boolean values
+            // are compiled to use values of the Java Virtual Machine int data type.
+            'Z' => Value::Int(0),
+            '[' => Value::Reference(0), // null reference to arrays
+            _ => unreachable!(),
+        };
+        FieldValue::from_val(default_val)
+    }
+}
+
+impl FieldValue {
+    pub fn get(&self) -> Value {
+        self.0.get()
+    }
+
+    pub fn put(&self, new_val: Value) {
+        self.0.set(new_val);
     }
 }
 
@@ -122,6 +210,11 @@ pub enum RunTimeCPInfo {
         name: String,
     },
     String(String),
+    Fieldref {
+        class_name: String,
+        name: String,
+        descriptor: String,
+    },
     Methodref {
         class_name: String,
         name: String,
@@ -150,6 +243,10 @@ impl RunTimeConstantPool {
                     name: cp.get_utf8(*name_idx).to_string(),
                 },
                 CPInfo::String { string_idx } => String(cp.get_utf8(*string_idx).to_string()),
+                CPInfo::Fieldref {
+                    class_idx,
+                    name_and_type_idx,
+                } => resolve_fieldref(&cp, *class_idx, *name_and_type_idx),
                 CPInfo::Methodref {
                     class_idx,
                     name_and_type_idx,
@@ -177,14 +274,55 @@ impl RunTimeConstantPool {
     }
 }
 
-fn resolve_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPInfo {
-    let &CPInfo::Class { name_idx } = cp.get_info(cls_idx) else {
-        eprintln!("failed to resolve methodref");
+fn resolve_fieldref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPInfo {
+    let Some(ConstPoolRef {
+        class_name,
+        name,
+        descriptor,
+    }) = resolve_const_pool_ref(cp, cls_idx, nt_idx)
+    else {
         return RunTimeCPInfo::Methodref {
             class_name: String::new(),
             name: String::new(),
             descriptor: String::new(),
         };
+    };
+    RunTimeCPInfo::Fieldref {
+        class_name,
+        name,
+        descriptor,
+    }
+}
+
+fn resolve_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPInfo {
+    let Some(ConstPoolRef {
+        class_name,
+        name,
+        descriptor,
+    }) = resolve_const_pool_ref(cp, cls_idx, nt_idx)
+    else {
+        return RunTimeCPInfo::Methodref {
+            class_name: String::new(),
+            name: String::new(),
+            descriptor: String::new(),
+        };
+    };
+    RunTimeCPInfo::Methodref {
+        class_name,
+        name,
+        descriptor,
+    }
+}
+
+struct ConstPoolRef {
+    class_name: String,
+    name: String,
+    descriptor: String,
+}
+fn resolve_const_pool_ref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> Option<ConstPoolRef> {
+    let &CPInfo::Class { name_idx } = cp.get_info(cls_idx) else {
+        eprintln!("failed to resolve methodref");
+        return None;
     };
     let class_name = cp.get_utf8(name_idx).to_string();
 
@@ -194,18 +332,14 @@ fn resolve_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPI
     } = cp.get_info(nt_idx)
     else {
         eprintln!("failed to resolve methodref");
-        return RunTimeCPInfo::Methodref {
-            class_name: String::new(),
-            name: String::new(),
-            descriptor: String::new(),
-        };
+        return None;
     };
     let name = cp.get_utf8(name_idx).to_string();
     let descriptor = cp.get_utf8(descriptor_idx).to_string();
 
-    RunTimeCPInfo::Methodref {
+    Some(ConstPoolRef {
         class_name,
         name,
         descriptor,
-    }
+    })
 }
