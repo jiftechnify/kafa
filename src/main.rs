@@ -21,6 +21,8 @@ fn main() {
     print_result(vm.execute("MakeJVM", "start3", "()Z", &[]));
 
     print_result(vm.execute("StaticFieldsSample", "start", "()I", &[]));
+
+    print_result(vm.execute("loader/RuntimeClassLoadingSample", "start", "()I", &[]));
 }
 
 fn print_result(res: Result<Value, Box<dyn Error>>) {
