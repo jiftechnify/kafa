@@ -5,10 +5,21 @@ pub struct ConstantPool(pub Vec<CPInfo>);
 
 impl ConstantPool {
     pub fn parse(bs: &mut ByteSeq) -> Result<ConstantPool, Box<dyn std::error::Error + 'static>> {
-        let count = bs.read_u16() as usize;
-        let mut cp = Vec::with_capacity(count - 1);
-        for _ in 0..count - 1 {
-            cp.push(parse_cp_info(bs)?);
+        let count = (bs.read_u16() as usize) - 1;
+        let mut cp = Vec::with_capacity(count);
+        while cp.len() < count {
+            let parsed = parse_cp_info(bs)?;
+            match parsed {
+                // All 8-byte constants take up two entries in the constant_pool table of the class file. (JVM spec 4.4.5.)
+                // in this implementation, we put the constant to first slot and fill second slot with dummy.
+                CPInfo::Long(_) | CPInfo::Double(_) => {
+                    cp.push(parsed);
+                    cp.push(CPInfo::Unsupported);
+                }
+                _ => {
+                    cp.push(parsed);
+                }
+            }
         }
         Ok(ConstantPool(cp))
     }
