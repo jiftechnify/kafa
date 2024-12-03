@@ -4,13 +4,19 @@ mod class_file;
 mod support;
 mod vm;
 
+use std::env;
 use std::error::Error;
 
 use vm::{Value, VM};
 
+const ENV_KEY_CLASSPATH: &str = "KAFA_CLASSPATH";
+
 fn main() {
-    let Some(cp) = std::env::var_os("KAFA_CLASSPATH") else {
-        eprintln!("environment variable KAFA_CLASSPATH is not defined");
+    let Ok(cp) = env::var_os(ENV_KEY_CLASSPATH).ok_or_else(|| {
+        eprintln!("environment variable {ENV_KEY_CLASSPATH} is not set; fallback to $pwd");
+        env::current_dir()
+    }) else {
+        eprintln!("failed to determine classpath. abort");
         return;
     };
     println!("classpath: {cp:?}");
