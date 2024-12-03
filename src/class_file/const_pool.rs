@@ -13,10 +13,6 @@ impl ConstantPool {
         Ok(ConstantPool(cp))
     }
 
-    pub fn empty() -> ConstantPool {
-        ConstantPool(Vec::new())
-    }
-
     pub fn get_utf8(&self, idx: u16) -> &str {
         if let CPInfo::Utf8(s) = self.get_info(idx) {
             s.as_str()

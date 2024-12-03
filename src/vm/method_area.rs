@@ -17,12 +17,6 @@ impl MethodArea {
             loader,
         }
     }
-
-    pub fn with_class(loader: ClassLoader, cls: Rc<Class>) -> Self {
-        let mut classes = HashMap::new();
-        classes.insert(cls.name.clone(), cls);
-        MethodArea { classes, loader }
-    }
 }
 
 impl MethodArea {

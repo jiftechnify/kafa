@@ -1011,9 +1011,6 @@ fn instr_getstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionRes
     else {
         return Err("invalid fieldref")?;
     };
-    if *class_name != frame.get_class().name {
-        Err("getting field on another class is currently not supported")?
-    }
 
     let field = meth_area.lookup_static_field(class_name, name)?;
     frame.push_operand(field.get());
@@ -1031,9 +1028,6 @@ fn instr_putstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionRes
     else {
         return Err("invalid fieldref")?;
     };
-    if *class_name != frame.get_class().name {
-        Err("getting field on another class is currently not supported")?
-    }
 
     let field = meth_area.lookup_static_field(class_name, name)?;
     field.put(frame.pop_operand());

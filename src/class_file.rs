@@ -5,7 +5,7 @@ use crate::support::ByteSeq;
 mod attr;
 mod const_pool;
 
-use attr::{parse_attributes, Attribute, CodeAttr};
+use attr::{parse_attributes, Attribute};
 use bitflags::bitflags;
 pub use const_pool::{CPInfo, ConstantPool};
 
@@ -55,15 +55,6 @@ impl ClassFile {
             fields,
             methods,
         })
-    }
-}
-
-impl ClassFile {
-    // lookup the method by the name and the signature(descriptor)
-    pub fn find_method(&self, name: &str, desc: &str) -> Option<&MethodInfo> {
-        self.methods
-            .iter()
-            .find(|m| m.name == name && m.descriptor == desc)
     }
 }
 
@@ -156,15 +147,6 @@ pub struct MethodInfo {
 }
 
 impl MethodInfo {
-    pub fn get_code_attr(&self) -> Option<&CodeAttr> {
-        for attr in self.attributes.iter() {
-            if let Attribute::Code(code_attr) = attr {
-                return Some(code_attr);
-            }
-        }
-        None
-    }
-
     // TODO: refactor this
     pub fn into_components(self) -> (String, String, u16, u16, Vec<u8>) {
         for attr in self.attributes.into_iter() {
@@ -182,7 +164,7 @@ impl MethodInfo {
         (String::new(), String::new(), 0, 0, Vec::new())
     }
 
-    pub fn num_args(&self) -> usize {
+    fn num_args(&self) -> usize {
         self.descriptor[1..].find(')').expect("malformed signature")
     }
 
@@ -194,7 +176,7 @@ impl MethodInfo {
 
 impl Display for MethodInfo {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}{}", self.name, self.descriptor)
+        write!(f, "{}:{}", self.name, self.descriptor)
     }
 }
 

@@ -142,14 +142,13 @@ impl Frame {
         );
     }
 
+    /* Constant Poolの参照 */
     pub fn get_cp_info(&self, idx: u16) -> &RunTimeCPInfo {
         self.class.get_cp_info(idx)
     }
+}
 
-    pub fn get_class(&self) -> Rc<Class> {
-        self.class.clone()
-    }
-
+impl Frame {
     pub fn executing_method_info(&self) -> String {
         format!("{}.{}", self.class.name, self.meth_sig)
     }
