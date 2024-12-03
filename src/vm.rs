@@ -18,17 +18,17 @@ pub use value::Value;
 
 pub struct VM {
     thread: Thread,
-    class_path: OsString,
+    classpath: OsString,
 }
 
 impl VM {
-    pub fn new<P>(class_path: &P) -> VM
+    pub fn new<P>(classpath: &P) -> VM
     where
         P: AsRef<OsStr>,
     {
         VM {
             thread: Thread::new(),
-            class_path: OsString::from(class_path),
+            classpath: OsString::from(classpath),
         }
     }
 
@@ -41,7 +41,7 @@ impl VM {
     ) -> Result<Value, Box<dyn std::error::Error>> {
         println!("executing {class_name}.{method_name}:{method_desc} with args: {args:?}");
 
-        let cls_loader = ClassLoader::new(&self.class_path);
+        let cls_loader = ClassLoader::new(&self.classpath);
         let mut meth_area = MethodArea::new(cls_loader);
 
         // initialize class

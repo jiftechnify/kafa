@@ -9,11 +9,11 @@ use std::error::Error;
 use vm::{Value, VM};
 
 fn main() {
-    let Some(cp) = std::env::var_os("KAFA_CLASS_PATH") else {
-        eprintln!("environment variable KAFA_CLASS_PATH is not defined");
+    let Some(cp) = std::env::var_os("KAFA_CLASSPATH") else {
+        eprintln!("environment variable KAFA_CLASSPATH is not defined");
         return;
     };
-    println!("class path: {cp:?}");
+    println!("classpath: {cp:?}");
 
     let mut vm = VM::new(&cp);
 
