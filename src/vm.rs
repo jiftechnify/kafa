@@ -1,11 +1,3 @@
-use std::ffi::{OsStr, OsString};
-
-use class::MethodSignature;
-use class_loader::ClassLoader;
-use frame::Frame;
-use method_area::MethodArea;
-use thread::Thread;
-
 mod class;
 mod class_loader;
 mod frame;
@@ -14,6 +6,13 @@ mod method_area;
 mod thread;
 mod value;
 
+use std::ffi::{OsStr, OsString};
+
+use class::MethodSignature;
+pub use class_loader::ClassLoader;
+use frame::Frame;
+use method_area::MethodArea;
+use thread::Thread;
 pub use value::Value;
 
 pub struct VM {
