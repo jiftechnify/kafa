@@ -44,14 +44,8 @@ impl VM {
         let mut meth_area = MethodArea::new(cls_loader);
 
         // initialize class
-        let clinit_frame = Frame::new_empty();
-        self.thread.push_frame(clinit_frame);
-
-        let sig_clinit = MethodSignature::new("<clinit>", "()V");
-        let _ = self
-            .thread
-            .exec_bootstrap_method(&mut meth_area, class_name, &sig_clinit);
-        self.thread.pop_frame();
+        let init_cls = meth_area.lookup_class(class_name)?;
+        init_cls.initialize(&mut self.thread, &mut meth_area)?;
 
         // execute bootstrap method
         let mut bs_frame = Frame::new_empty();

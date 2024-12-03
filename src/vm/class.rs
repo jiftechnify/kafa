@@ -2,13 +2,15 @@ use std::{cell::Cell, collections::HashMap, rc::Rc};
 
 use crate::class_file::{CPInfo, ConstantPool};
 
-use super::Value;
+use super::{method_area::MethodArea, thread::Thread, Value};
 
 pub struct Class {
     pub name: String,
     const_pool: RunTimeConstantPool,
     static_fields: HashMap<String, Rc<FieldValue>>,
     static_methods: HashMap<MethodSignature, Rc<Method>>,
+
+    init_state: Cell<ClassInitState>,
 }
 
 impl Class {
@@ -18,6 +20,7 @@ impl Class {
         let mut static_fields = HashMap::new();
         for f in cls_file.fields.into_iter().filter(|f| f.is_static()) {
             let fv = match f.get_const_val() {
+                // TODO: strictly speaking, this should be done within "initialization" process described in JVM spec 5.5.
                 Some(cp_info) => FieldValue::from_cp_info(cp_info),
                 None => FieldValue::default_val_of_type(&f.descriptor),
             };
@@ -47,6 +50,7 @@ impl Class {
             const_pool: rtcp,
             static_fields,
             static_methods,
+            init_state: Cell::new(ClassInitState::BeforeInit),
         }
     }
 
@@ -56,7 +60,40 @@ impl Class {
             const_pool: RunTimeConstantPool::empty(),
             static_fields: HashMap::new(),
             static_methods: HashMap::new(),
+            init_state: Cell::new(ClassInitState::BeforeInit),
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ClassInitState {
+    BeforeInit,
+    InProgress,
+    Succeeded,
+    Failed,
+}
+
+impl Class {
+    // execute class initialization steps described in JVM spec 5.5.
+    pub(in crate::vm) fn initialize(
+        self: Rc<Self>,
+        thread: &mut Thread,
+        meth_area: &mut MethodArea,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        use ClassInitState::*;
+
+        let BeforeInit = self.init_state.get() else {
+            return Ok(());
+        };
+        self.init_state.set(InProgress);
+        thread
+            .exec_class_initialization(meth_area, self.clone())
+            .inspect(|_| {
+                self.init_state.set(Succeeded);
+            })
+            .inspect_err(|_| {
+                self.init_state.set(Failed);
+            })
     }
 }
 

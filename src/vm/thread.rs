@@ -1,5 +1,10 @@
+use std::rc::Rc;
+
 use super::{
-    class::MethodSignature, frame::Frame, instruction::exec_instr, method_area::MethodArea,
+    class::{Class, MethodSignature},
+    frame::Frame,
+    instruction::exec_instr,
+    method_area::MethodArea,
 };
 
 pub struct Thread {
@@ -51,6 +56,30 @@ impl Thread {
         loop {
             if self.frames.len() == 1 {
                 // returned to bootstrap frame -> program finished!
+                break;
+            }
+            exec_instr(self, meth_area)?;
+        }
+        Ok(())
+    }
+
+    pub(in crate::vm) fn exec_class_initialization(
+        &mut self,
+        meth_area: &mut MethodArea,
+        cls: Rc<Class>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let sig_clinit = &MethodSignature::new("<clinit>", "()V");
+        let Some(clinit) = cls.lookup_static_method(sig_clinit) else {
+            return Ok(());
+        };
+
+        let orig_depth = self.frames.len();
+
+        let frame = Frame::new(cls, clinit);
+        self.push_frame(frame);
+
+        loop {
+            if self.frames.len() == orig_depth {
                 break;
             }
             exec_instr(self, meth_area)?;

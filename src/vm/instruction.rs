@@ -1002,61 +1002,82 @@ instr_return!(instr_return, void);
 
 // get a value of a static field
 fn instr_getstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
-    let frame = t.current_frame();
+    let (cls_name, fld_name) = {
+        let frame = t.current_frame();
 
-    let idx = frame.next_param_u16();
-    let CPInfo::Fieldref {
-        class_name, name, ..
-    } = frame.get_cp_info(idx)
-    else {
-        return Err("invalid fieldref")?;
+        let idx = frame.next_param_u16();
+        let CPInfo::Fieldref {
+            class_name, name, ..
+        } = frame.get_cp_info(idx)
+        else {
+            return Err("invalid fieldref")?;
+        };
+        (class_name.clone(), name.clone())
     };
 
-    let field = meth_area.lookup_static_field(class_name, name)?;
+    let cls = meth_area.lookup_class(&cls_name)?;
+    cls.initialize(t, meth_area)?;
+
+    let frame = t.current_frame();
+    let field = meth_area.lookup_static_field(&cls_name, &fld_name)?;
     frame.push_operand(field.get());
     Ok(())
 }
 
 // put a value to a static field
 fn instr_putstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
-    let frame = t.current_frame();
+    let (cls_name, fld_name) = {
+        let frame = t.current_frame();
 
-    let idx = frame.next_param_u16();
-    let CPInfo::Fieldref {
-        class_name, name, ..
-    } = frame.get_cp_info(idx)
-    else {
-        return Err("invalid fieldref")?;
+        let idx = frame.next_param_u16();
+        let CPInfo::Fieldref {
+            class_name, name, ..
+        } = frame.get_cp_info(idx)
+        else {
+            return Err("invalid fieldref")?;
+        };
+        (class_name.clone(), name.clone())
     };
 
-    let field = meth_area.lookup_static_field(class_name, name)?;
+    let cls = meth_area.lookup_class(&cls_name)?;
+    cls.initialize(t, meth_area)?;
+
+    let frame = t.current_frame();
+    let field = meth_area.lookup_static_field(&cls_name, &fld_name)?;
     field.put(frame.pop_operand());
     Ok(())
 }
 
 fn instr_invokestatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
-    let frame = t.current_frame();
+    let (cls_name, meth_name, desc) = {
+        let frame = t.current_frame();
 
-    // lookup methodref from const pool
-    let idx = frame.next_param_u16();
-    let CPInfo::Methodref {
-        class_name,
-        name,
-        descriptor,
-    } = frame.get_cp_info(idx)
-    else {
-        return Err("invalid methodref")?;
+        // lookup methodref from const pool
+        let idx = frame.next_param_u16();
+        let CPInfo::Methodref {
+            class_name,
+            name,
+            descriptor,
+        } = frame.get_cp_info(idx)
+        else {
+            return Err("invalid methodref")?;
+        };
+        (class_name.clone(), name.clone(), descriptor.clone())
     };
 
+    let cls = meth_area.lookup_class(&cls_name)?;
+    cls.initialize(t, meth_area)?;
+
     // lookup method to be called
-    let sig = MethodSignature::new(name, descriptor);
-    let (cls, meth) = meth_area.lookup_static_method(class_name, &sig)?;
+    let sig = MethodSignature::new(&meth_name, &desc);
+    let (cls, meth) = meth_area.lookup_static_method(&cls_name, &sig)?;
     let num_args = meth.num_args();
 
     // method call
     // create new frame for the method, transfer args to the frame, then push onto frame stack
+    let caller_frame = t.current_frame();
     let mut callee_frame = Frame::new(cls, meth);
-    Frame::transfer_args(frame, &mut callee_frame, num_args);
+    Frame::transfer_args(caller_frame, &mut callee_frame, num_args);
     t.push_frame(callee_frame);
 
     Ok(())
