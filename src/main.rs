@@ -12,10 +12,13 @@ use vm::{Value, VM};
 const ENV_KEY_CLASSPATH: &str = "KAFA_CLASSPATH";
 
 fn main() {
-    let Ok(cp) = env::var_os(ENV_KEY_CLASSPATH).ok_or_else(|| {
-        eprintln!("environment variable {ENV_KEY_CLASSPATH} is not set; fallback to $pwd");
-        env::current_dir()
-    }) else {
+    let Ok(cp) = env::var_os(ENV_KEY_CLASSPATH).map_or_else(
+        || {
+            eprintln!("environment variable {ENV_KEY_CLASSPATH} is not set; fallback to $pwd");
+            env::current_dir()
+        },
+        |cp| Ok(cp.into()),
+    ) else {
         eprintln!("failed to determine classpath. abort");
         return;
     };
