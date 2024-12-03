@@ -7,3 +7,4 @@ license = "MIT/Apache-2.0"
 
 [dependencies]
 bitflags = "2.6.0"
+zip = "2.2.1"
