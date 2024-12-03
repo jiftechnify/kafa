@@ -89,6 +89,7 @@ impl ClassLoader {
     }
 }
 
+// the logic is borrowed from std::env::split_paths
 fn split_classpath<P>(cp: &P) -> Vec<PathBuf>
 where
     P: AsRef<OsStr>,
