@@ -179,10 +179,20 @@ fn parse_cp_info(bs: &mut ByteSeq) -> Result<CPInfo, Box<dyn std::error::Error +
             name_idx: bs.read_u16(),
             descriptor_idx: bs.read_u16(),
         },
+        // skip unsupported cp info type
+        16 | 19 | 20 => skip_unsupported_cp_info(bs, tag, 2),
+        15 => skip_unsupported_cp_info(bs, tag, 3),
+        11 | 17 | 18 => skip_unsupported_cp_info(bs, tag, 4),
         _ => {
-            eprintln!("skipping unsupported constant pool info type: {}", tag);
-            CPInfo::Unsupported
+            eprintln!("invalid cp info tag");
+            unreachable!()
         }
     };
     Ok(parsed)
+}
+
+fn skip_unsupported_cp_info(bs: &mut ByteSeq, tag: u8, n: usize) -> CPInfo {
+    eprintln!("skipping unsupported constant pool info type: {}", tag);
+    bs.skip(n);
+    CPInfo::Unsupported
 }
