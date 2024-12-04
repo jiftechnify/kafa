@@ -13,6 +13,8 @@ pub use const_pool::{CPInfo, ConstantPool};
 pub struct ClassFile {
     pub constant_pool: ConstantPool,
     pub this_class: String,
+    pub super_class: String,
+    pub interfaces: Vec<String>,
     pub fields: Vec<FieldInfo>,
     pub methods: Vec<MethodInfo>,
 }
@@ -35,13 +37,14 @@ impl ClassFile {
 
         // skip access_flags
         bs.skip(2);
-        // parse this_class
+
+        // parse this_class and super_class
         let this_class = parse_class_ref(&mut bs, &cp);
-        // skip super_class
-        bs.skip(2);
-        // skip interfaces
+        let super_class = parse_class_ref(&mut bs, &cp);
+        // parse interfaces
         let ifaces_count = bs.read_u16() as usize;
-        bs.skip(2 * ifaces_count);
+        let mut interfaces = Vec::with_capacity(ifaces_count);
+        interfaces.resize_with(ifaces_count, || parse_class_ref(&mut bs, &cp));
 
         // parse fields and methods
         let fields = parse_fields(&mut bs, &cp);
@@ -52,6 +55,8 @@ impl ClassFile {
         Ok(ClassFile {
             constant_pool: cp,
             this_class,
+            super_class,
+            interfaces,
             fields,
             methods,
         })
