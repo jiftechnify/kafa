@@ -3,6 +3,7 @@ use std::rc::Rc;
 use super::{
     class::{Class, MethodSignature},
     frame::Frame,
+    heap::Heap,
     instruction::exec_instr,
     method_area::MethodArea,
 };
@@ -33,6 +34,7 @@ impl Thread {
     pub fn exec_bootstrap_method(
         &mut self,
         meth_area: &mut MethodArea,
+        heap: &mut Heap,
         class_name: &str,
         sig: &MethodSignature,
     ) -> Result<(), Box<dyn std::error::Error>> {
@@ -58,7 +60,7 @@ impl Thread {
                 // returned to bootstrap frame -> program finished!
                 break;
             }
-            exec_instr(self, meth_area)?;
+            exec_instr(self, meth_area, heap)?;
         }
         Ok(())
     }
@@ -66,6 +68,7 @@ impl Thread {
     pub(in crate::vm) fn exec_class_initialization(
         &mut self,
         meth_area: &mut MethodArea,
+        heap: &mut Heap,
         cls: Rc<Class>,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let sig_clinit = &MethodSignature::new("<clinit>", "()V");
@@ -82,7 +85,7 @@ impl Thread {
             if self.frames.len() == orig_depth {
                 break;
             }
-            exec_instr(self, meth_area)?;
+            exec_instr(self, meth_area, heap)?;
         }
         Ok(())
     }

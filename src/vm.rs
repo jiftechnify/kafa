@@ -12,6 +12,7 @@ use std::ffi::{OsStr, OsString};
 use class::MethodSignature;
 pub use class_loader::ClassLoader;
 use frame::Frame;
+use heap::Heap;
 use method_area::MethodArea;
 use thread::Thread;
 pub use value::Value;
@@ -43,10 +44,11 @@ impl VM {
 
         let cls_loader = ClassLoader::new(&self.classpath);
         let mut meth_area = MethodArea::new(cls_loader);
+        let mut heap = Heap::new();
 
         // initialize class
         let init_cls = meth_area.lookup_class(class_name)?;
-        init_cls.initialize(&mut self.thread, &mut meth_area)?;
+        init_cls.initialize(&mut self.thread, &mut meth_area, &mut heap)?;
 
         // execute bootstrap method
         let mut bs_frame = Frame::new_empty();
@@ -57,7 +59,7 @@ impl VM {
 
         let sig = MethodSignature::new(method_name, method_desc);
         self.thread
-            .exec_bootstrap_method(&mut meth_area, class_name, &sig)?;
+            .exec_bootstrap_method(&mut meth_area, &mut heap, class_name, &sig)?;
 
         let res = self.thread.current_frame().pop_operand();
         self.thread.pop_frame();

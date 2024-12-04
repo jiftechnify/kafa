@@ -2,7 +2,7 @@ use std::{cell::Cell, collections::HashMap, rc::Rc};
 
 use crate::class_file::{CPInfo, ConstantPool, FieldInfo};
 
-use super::{method_area::MethodArea, thread::Thread, Value};
+use super::{heap::Heap, method_area::MethodArea, thread::Thread, Value};
 
 pub struct Class {
     pub name: String,
@@ -100,6 +100,7 @@ impl Class {
         self: Rc<Self>,
         thread: &mut Thread,
         meth_area: &mut MethodArea,
+        heap: &mut Heap,
     ) -> Result<(), Box<dyn std::error::Error>> {
         use ClassInitState::*;
 
@@ -108,7 +109,7 @@ impl Class {
         };
         self.init_state.set(InProgress);
         thread
-            .exec_class_initialization(meth_area, self.clone())
+            .exec_class_initialization(meth_area, heap, self.clone())
             .inspect(|_| {
                 self.init_state.set(Succeeded);
             })
@@ -151,6 +152,7 @@ impl std::fmt::Display for FieldDescriptor {
     }
 }
 
+#[derive(Clone)]
 pub struct FieldValue(Cell<Value>);
 
 impl FieldValue {

@@ -1,18 +1,23 @@
 use super::class::{MethodSignature, RunTimeCPInfo as CPInfo};
 use super::frame::Frame;
+use super::heap::Heap;
 use super::method_area::MethodArea;
 use super::thread::Thread;
 use super::value::{Value, ValueCategory};
 
 type InstructionResult = Result<(), Box<dyn std::error::Error>>;
-type Instruction = fn(&mut Thread, &mut MethodArea) -> InstructionResult;
+type Instruction = fn(&mut Thread, &mut MethodArea, &mut Heap) -> InstructionResult;
 
-pub fn exec_instr(thread: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
+pub fn exec_instr(
+    thread: &mut Thread,
+    meth_area: &mut MethodArea,
+    heap: &mut Heap,
+) -> InstructionResult {
     let op_code = thread.current_frame().next_instruction();
     let instr = INSTRUCTION_TABLE[op_code as usize]
         .ok_or_else(|| format!("op(code = {:#x}) has been not implemented", op_code))?;
 
-    instr(thread, meth_area)
+    instr(thread, meth_area, heap)
 }
 
 macro_rules! instruction_table {
@@ -203,28 +208,37 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0xB2 => instr_getstatic,
     0xB3 => instr_putstatic,
     0xB8 => instr_invokestatic,
+    0xBB => instr_new,
 };
 
 // no-op
-fn instr_nop(_: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_nop(_: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     Ok(())
 }
 
 // push null reference to the operand stack
 // TODO: representation of null reference is TENTATIVE
-fn instr_aconst_null(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_aconst_null(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     t.current_frame().push_operand(Value::Reference(0));
     Ok(())
 }
 
 // push the constant N to the operand stack (int)
-fn instr_iconst<const N: i32>(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_iconst<const N: i32>(
+    t: &mut Thread,
+    _: &mut MethodArea,
+    _: &mut Heap,
+) -> InstructionResult {
     t.current_frame().push_operand(Value::Int(N));
     Ok(())
 }
 
 // push the constant N to the operand stack (long)
-fn instr_lconst<const N: i64>(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_lconst<const N: i64>(
+    t: &mut Thread,
+    _: &mut MethodArea,
+    _: &mut Heap,
+) -> InstructionResult {
     t.current_frame().push_operand(Value::Long(N));
     Ok(())
 }
@@ -232,7 +246,7 @@ fn instr_lconst<const N: i64>(t: &mut Thread, _: &mut MethodArea) -> Instruction
 // push the constant N to the operand stack (float)
 macro_rules! instr_fconst {
     ($name:ident, $value:expr) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             t.current_frame().push_operand(Value::Float($value));
             Ok(())
         }
@@ -245,7 +259,7 @@ instr_fconst!(instr_fconst_2, 2.0);
 // push the constant N to the operand stack (double)
 macro_rules! instr_dconst {
     ($name:ident, $value:expr) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             t.current_frame().push_operand(Value::Double($value));
             Ok(())
         }
@@ -255,7 +269,7 @@ instr_dconst!(instr_dconst_0, 0.0);
 instr_dconst!(instr_dconst_1, 1.0);
 
 // push immediate byte to the operand stack (byte is sign-extended to an int value)
-fn instr_bipush(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_bipush(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     let v = frame.next_param_u8() as i8 as i32;
     frame.push_operand(Value::Int(v));
@@ -263,7 +277,7 @@ fn instr_bipush(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 }
 
 // push immediate short to the operand stack (short is sign-extended to an int value)
-fn instr_sipush(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_sipush(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     let v = frame.next_param_u16() as i16 as i32;
     frame.push_operand(Value::Int(v));
@@ -271,7 +285,7 @@ fn instr_sipush(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 }
 
 // push a constant from constant pool to the operand stack
-fn instr_ldc(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_ldc(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     let idx = frame.next_param_u8();
     let v = match frame.get_cp_info(idx as u16) {
@@ -286,7 +300,7 @@ fn instr_ldc(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 }
 
 // push a constant from constant pool to the operand stack (wide index)
-fn instr_ldc_w(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_ldc_w(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     let idx = frame.next_param_u16();
     let v = match frame.get_cp_info(idx) {
@@ -301,7 +315,7 @@ fn instr_ldc_w(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 }
 
 // push a long/double constant from constant pool to the operand stack (wide index)
-fn instr_ldc2_w(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_ldc2_w(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     let idx = frame.next_param_u16();
     let v = match frame.get_cp_info(idx) {
@@ -318,7 +332,7 @@ fn instr_ldc2_w(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 // push the specified local (by index) to the operand stack
 macro_rules! instr_load {
     ($name:ident, $name_n:ident, $vtype:path, $vtype_name:expr) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let idx = frame.next_param_u8() as usize;
             let v @ $vtype(_) = frame.get_local(idx) else {
@@ -327,7 +341,11 @@ macro_rules! instr_load {
             frame.push_operand(v);
             Ok(())
         }
-        fn $name_n<const N: usize>(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name_n<const N: usize>(
+            t: &mut Thread,
+            _: &mut MethodArea,
+            _: &mut Heap,
+        ) -> InstructionResult {
             let frame = t.current_frame();
             let v @ $vtype(_) = frame.get_local(N) else {
                 return Err(concat!("target local is not type '", $vtype_name, "'").into());
@@ -346,7 +364,7 @@ instr_load!(instr_aload, instr_aload_n, Value::Reference, "reference");
 // pop from the operand stack and store it to the specified local (by index)
 macro_rules! instr_store {
     ($name:ident, $name_n:ident, $vtype:path, $vtype_name:expr) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let idx = frame.next_param_u8() as usize;
             let v @ $vtype(_) = frame.pop_operand() else {
@@ -355,7 +373,11 @@ macro_rules! instr_store {
             frame.set_local(idx, v);
             Ok(())
         }
-        fn $name_n<const N: usize>(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name_n<const N: usize>(
+            t: &mut Thread,
+            _: &mut MethodArea,
+            _: &mut Heap,
+        ) -> InstructionResult {
             let frame = t.current_frame();
             let v @ $vtype(_) = frame.pop_operand() else {
                 return Err(concat!("target operand is not type '", $vtype_name, "'").into());
@@ -380,13 +402,13 @@ macro_rules! pop_operand_if_category_matches {
     }};
 }
 
-fn instr_pop(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_pop(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     pop_operand_if_category_matches!(frame, ValueCategory::One);
     Ok(())
 }
 
-fn instr_pop2(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_pop2(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     match frame.peek_operand().category() {
         ValueCategory::Two => {
@@ -401,7 +423,7 @@ fn instr_pop2(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     }
 }
 
-fn instr_dup(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_dup(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     let top = frame.peek_operand();
     let ValueCategory::One = top.category() else {
@@ -411,7 +433,7 @@ fn instr_dup(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     Ok(())
 }
 
-fn instr_dup_x1(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_dup_x1(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
 
     let v1 = pop_operand_if_category_matches!(frame, ValueCategory::One);
@@ -423,7 +445,7 @@ fn instr_dup_x1(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     Ok(())
 }
 
-fn instr_dup_x2(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_dup_x2(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     let v1 = pop_operand_if_category_matches!(frame, ValueCategory::One);
 
@@ -450,7 +472,7 @@ fn instr_dup_x2(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     }
 }
 
-fn instr_dup2(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_dup2(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     match frame.peek_operand().category() {
         ValueCategory::One => {
@@ -472,7 +494,7 @@ fn instr_dup2(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     }
 }
 
-fn instr_dup2_x1(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_dup2_x1(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     match frame.peek_operand().category() {
         ValueCategory::One => {
@@ -500,7 +522,7 @@ fn instr_dup2_x1(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     Ok(())
 }
 
-fn instr_dup2_x2(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_dup2_x2(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     match frame.peek_operand().category() {
         ValueCategory::One => {
@@ -560,7 +582,7 @@ fn instr_dup2_x2(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     Ok(())
 }
 
-fn instr_swap(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_swap(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     let v1 = pop_operand_if_category_matches!(frame, ValueCategory::One);
     let v2 = pop_operand_if_category_matches!(frame, ValueCategory::One);
@@ -572,7 +594,7 @@ fn instr_swap(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 
 macro_rules! instr_unary_op {
     ($name:ident, $op:tt, $vtype:path, $vtype_name:expr) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let $vtype(v) = frame.pop_operand() else {
                 return Err(concat!("target operand is not type '", $vtype_name, "'").into());
@@ -585,7 +607,7 @@ macro_rules! instr_unary_op {
 
 macro_rules! instr_binary_op {
     ($name:ident, $op:tt, $vtype:path, $vtype_name:expr) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let $vtype(rhs) = frame.pop_operand() else {
                 return Err(concat!("target operand is not type '", $vtype_name, "'").into());
@@ -602,7 +624,7 @@ macro_rules! instr_binary_op {
 macro_rules! instr_shift_op {
     // shift with zero-extension
     ($name:ident, $op:tt, u, Value::Int) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let Value::Int(v2) = frame.pop_operand() else {
                 return Err(concat!("target operand is not type 'int'").into());
@@ -616,7 +638,7 @@ macro_rules! instr_shift_op {
         }
     };
     ($name:ident, $op:tt, u, Value::Long) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let Value::Int(v2) = frame.pop_operand() else {
                 return Err(concat!("target operand is not type 'int'").into());
@@ -631,7 +653,7 @@ macro_rules! instr_shift_op {
     };
     // shift with sign-extension
     ($name:ident, $op:tt, Value::Int) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let Value::Int(v2) = frame.pop_operand() else {
                 return Err(concat!("target operand is not type 'int'").into());
@@ -645,7 +667,7 @@ macro_rules! instr_shift_op {
         }
     };
     ($name:ident, $op:tt, Value::Long) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let Value::Int(v2) = frame.pop_operand() else {
                 return Err(concat!("target operand is not type 'int'").into());
@@ -711,7 +733,7 @@ instr_binary_op!(instr_lxor, ^, Value::Long, "long");
 // increment the value of the local (specified by index) by delta
 // operands: target local index, delta(signed int)
 #[allow(overflowing_literals)]
-fn instr_iinc(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_iinc(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
 
     let idx = frame.next_param_u8() as usize;
@@ -725,7 +747,7 @@ fn instr_iinc(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 
 macro_rules! instr_conversion {
     ($name:ident, $from:path, trunc, $to_raw:ty) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let $from(v) = frame.pop_operand() else {
                 return Err(concat!("target operand has invalid type").into());
@@ -735,7 +757,7 @@ macro_rules! instr_conversion {
         }
     };
     ($name:ident, $from:path, $to:path, $to_raw:ty) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let $from(v) = frame.pop_operand() else {
                 return Err(concat!("target operand has invalid type").into());
@@ -768,7 +790,7 @@ instr_conversion!(instr_i2s, Value::Int, trunc, i16);
 
 // compare the top (rhs) and the 2nd-top (lhs) values of the operand stack, assuming both are Long values.
 // push the result of the comparison to the operand stack.
-fn instr_lcmp(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_lcmp(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
 
     let Value::Long(rhs) = frame.pop_operand() else {
@@ -790,7 +812,7 @@ fn instr_lcmp(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 // push the result of the comparison to the operand stack. if either of the values is NaN, push $if_nan.
 macro_rules! instr_compare_floats {
     ($name:ident, $vtype:path, $vtype_name:expr, $if_nan:expr) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
 
             let $vtype(rhs) = frame.pop_operand() else {
@@ -821,7 +843,7 @@ instr_compare_floats!(instr_dcmpg, Value::Double, "double", 1);
 // operands: delta of PC(signed int)
 macro_rules! instr_if_cond {
     ($name:ident, $cmp_op:tt) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
 
             let pc_delta = frame.next_param_u16() as i16 as i32;
@@ -850,7 +872,7 @@ instr_if_cond!(instr_ifge, >=);
 macro_rules! instr_cmp_cond {
     ($name:ident, $cmp_op:tt, $vtype:path, $vtype_name:expr) => {
         #[allow(overflowing_literals)]
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
 
             let pc_delta = frame.next_param_u16() as i16 as i32;
@@ -880,7 +902,7 @@ instr_cmp_cond!(instr_if_acmpne, !=, Value::Reference, "reference");
 
 // move PC to: {current PC} + {delta}
 // operands: delta of PC(signed int)
-fn instr_goto(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_goto(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
 
     let pc_delta = frame.next_param_u16() as i16 as i32;
@@ -891,7 +913,7 @@ fn instr_goto(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 
 // push the "return address" (PC for next instruction) to the operand stack, then jump to {current PC} + {delta}
 // operands: delta of PC(signed int)
-fn instr_jsr(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_jsr(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
 
     let pc_delta = frame.next_param_u16() as i16 as i32;
@@ -902,7 +924,7 @@ fn instr_jsr(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 }
 
 // jump to the "return address" stored in the specified local (by index)
-fn instr_ret(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_ret(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
 
     let idx = frame.next_param_u8() as usize;
@@ -913,7 +935,7 @@ fn instr_ret(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     Ok(())
 }
 
-fn instr_tableswitch(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_tableswitch(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
 
     frame.skip_code_padding(4);
@@ -940,7 +962,7 @@ fn instr_tableswitch(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
     Ok(())
 }
 
-fn instr_lookupswitch(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+fn instr_lookupswitch(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
 
     frame.skip_code_padding(4);
@@ -974,13 +996,13 @@ fn instr_lookupswitch(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
 // return from the method
 macro_rules! instr_return {
     ($name:ident, void) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             t.pop_frame();
             Ok(())
         }
     };
     ($name:ident, $vtype:path, $vtype_name:expr) => {
-        fn $name(t: &mut Thread, _: &mut MethodArea) -> InstructionResult {
+        fn $name(t: &mut Thread, _: &mut MethodArea, _: &mut Heap) -> InstructionResult {
             let frame = t.current_frame();
             let ret @ $vtype(_) = frame.pop_operand() else {
                 return Err(concat!("target operand is not type '", $vtype_name, "'").into());
@@ -1001,7 +1023,11 @@ instr_return!(instr_areturn, Value::Reference, "reference");
 instr_return!(instr_return, void);
 
 // get a value of a static field
-fn instr_getstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
+fn instr_getstatic(
+    t: &mut Thread,
+    meth_area: &mut MethodArea,
+    heap: &mut Heap,
+) -> InstructionResult {
     let (cls_name, fld_name) = {
         let frame = t.current_frame();
 
@@ -1016,7 +1042,7 @@ fn instr_getstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionRes
     };
 
     let cls = meth_area.lookup_class(&cls_name)?;
-    cls.initialize(t, meth_area)?;
+    cls.initialize(t, meth_area, heap)?;
 
     let frame = t.current_frame();
     let field = meth_area.lookup_static_field(&cls_name, &fld_name)?;
@@ -1025,7 +1051,11 @@ fn instr_getstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionRes
 }
 
 // put a value to a static field
-fn instr_putstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
+fn instr_putstatic(
+    t: &mut Thread,
+    meth_area: &mut MethodArea,
+    heap: &mut Heap,
+) -> InstructionResult {
     let (cls_name, fld_name) = {
         let frame = t.current_frame();
 
@@ -1040,7 +1070,7 @@ fn instr_putstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionRes
     };
 
     let cls = meth_area.lookup_class(&cls_name)?;
-    cls.initialize(t, meth_area)?;
+    cls.initialize(t, meth_area, heap)?;
 
     let frame = t.current_frame();
     let field = meth_area.lookup_static_field(&cls_name, &fld_name)?;
@@ -1048,7 +1078,11 @@ fn instr_putstatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionRes
     Ok(())
 }
 
-fn instr_invokestatic(t: &mut Thread, meth_area: &mut MethodArea) -> InstructionResult {
+fn instr_invokestatic(
+    t: &mut Thread,
+    meth_area: &mut MethodArea,
+    heap: &mut Heap,
+) -> InstructionResult {
     let (cls_name, meth_name, desc) = {
         let frame = t.current_frame();
 
@@ -1066,7 +1100,7 @@ fn instr_invokestatic(t: &mut Thread, meth_area: &mut MethodArea) -> Instruction
     };
 
     let cls = meth_area.lookup_class(&cls_name)?;
-    cls.initialize(t, meth_area)?;
+    cls.initialize(t, meth_area, heap)?;
 
     // lookup method to be called
     let sig = MethodSignature::new(&meth_name, &desc);
@@ -1079,6 +1113,25 @@ fn instr_invokestatic(t: &mut Thread, meth_area: &mut MethodArea) -> Instruction
     let mut callee_frame = Frame::new(cls, meth);
     Frame::transfer_args(caller_frame, &mut callee_frame, num_args);
     t.push_frame(callee_frame);
+
+    Ok(())
+}
+
+fn instr_new(t: &mut Thread, meth_area: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
+    let cls_name = {
+        let frame = t.current_frame();
+        let idx = frame.next_param_u16();
+        let CPInfo::Class { name } = frame.get_cp_info(idx) else {
+            return Err("not class")?;
+        };
+        name
+    };
+
+    let cls = meth_area.lookup_class(cls_name)?;
+    cls.clone().initialize(t, meth_area, heap)?;
+
+    let rv = heap.alloc_object(cls.clone());
+    t.current_frame().push_operand(rv);
 
     Ok(())
 }
