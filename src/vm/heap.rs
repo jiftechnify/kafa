@@ -94,6 +94,14 @@ impl Array {
         RefValue::Array(arr)
     }
 
+    pub fn get(&self, idx: usize) -> Option<Value> {
+        self.data.get(idx).map(|fv| fv.get())
+    }
+
+    pub fn put(&mut self, idx: usize, v: Value) {
+        self.data.get(idx).inspect(|fv| fv.put(v));
+    }
+
     pub fn get_length(&self) -> usize {
         self.length
     }

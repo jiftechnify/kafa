@@ -81,7 +81,14 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x2B => instr_aload_n::<1>,
     0x2C => instr_aload_n::<2>,
     0x2D => instr_aload_n::<3>,
-    // TODO: implement load from array
+    0x2E => instr_iaload,
+    0x2F => instr_laload,
+    0x30 => instr_faload,
+    0x31 => instr_daload,
+    0x32 => instr_aaload,
+    0x33 => instr_baload,
+    0x34 => instr_caload,
+    0x35 => instr_saload,
 
     0x36 => instr_istore,
     0x37 => instr_lstore,
@@ -108,7 +115,14 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0x4C => instr_astore_n::<1>,
     0x4D => instr_astore_n::<2>,
     0x4E => instr_astore_n::<3>,
-    // TODO: implement store to array
+    0x4F => instr_iastore,
+    0x50 => instr_lastore,
+    0x51 => instr_fastore,
+    0x52 => instr_dastore,
+    0x53 => instr_aastore,
+    0x54 => instr_bastore,
+    0x55 => instr_castore,
+    0x56 => instr_sastore,
 
     0x57 => instr_pop,
     0x58 => instr_pop2,
@@ -214,10 +228,15 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0xB6 => instr_invokevirtual,
     0xB7 => instr_invokespecial,
     0xB8 => instr_invokestatic,
+    // 0xB9 => instr_invokeinterface,
+    // 0xBA => instr_invokedynamic,
     0xBB => instr_new,
     0xBC => instr_newarray,
     0xBD => instr_anewarray,
     0xBE => instr_arraylength,
+    // 0xBF => instr_athrow,
+    // 0xC0 => instr_checkcast,
+    // 0xC1 => instr_instanceof,
 };
 
 // no-op
@@ -370,6 +389,48 @@ instr_load!(instr_fload, instr_fload_n, Value::Float, "float");
 instr_load!(instr_dload, instr_dload_n, Value::Double, "double");
 instr_load!(instr_aload, instr_aload_n, Value::Reference, "reference");
 
+// push the an element of an array to the operand stack
+macro_rules! instr_aload {
+    ($name:ident, $vtype:path, $vtype_name:expr) => {
+        fn $name(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
+            let frame = t.current_frame();
+
+            let Value::Int(idx) = frame.pop_operand() else {
+                return Err("index is not an int")?;
+            };
+
+            let Value::Reference(r) = frame.pop_operand() else {
+                return Err("operand is not a reference value")?;
+            };
+            let Some(rv) = heap.get(r) else {
+                return Err("referent not found on heap")?;
+            };
+            let RefValue::Array(arr) = rv else {
+                return Err("referent is not an array")?;
+            };
+
+            let Some(v) = arr.get(idx as usize) else {
+                return Err("array index out of bound")?;
+            };
+            let v @ $vtype(_) = v else {
+                return Err(concat!("got value doesn't have type '", $vtype_name, "'"))?;
+            };
+            frame.push_operand(v);
+
+            Ok(())
+        }
+    };
+}
+
+instr_aload!(instr_iaload, Value::Int, "int");
+instr_aload!(instr_laload, Value::Long, "long");
+instr_aload!(instr_faload, Value::Float, "float");
+instr_aload!(instr_daload, Value::Double, "double");
+instr_aload!(instr_aaload, Value::Reference, "reference");
+instr_aload!(instr_baload, Value::Byte, "byte");
+instr_aload!(instr_caload, Value::Char, "char");
+instr_aload!(instr_saload, Value::Short, "short");
+
 // pop from the operand stack and store it to the specified local (by index)
 macro_rules! instr_store {
     ($name:ident, $name_n:ident, $vtype:path, $vtype_name:expr) => {
@@ -401,6 +462,49 @@ instr_store!(instr_lstore, instr_lstore_n, Value::Long, "long");
 instr_store!(instr_fstore, instr_fstore_n, Value::Float, "float");
 instr_store!(instr_dstore, instr_dstore_n, Value::Double, "double");
 instr_store!(instr_astore, instr_astore_n, Value::Reference, "reference");
+
+macro_rules! instr_astore {
+    ($name:ident, $vtype:path, $vtype_name:expr) => {
+        fn $name(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
+            let frame = t.current_frame();
+
+            let v @ $vtype(_) = frame.pop_operand() else {
+                return Err(concat!(
+                    "the value to store doesn't have type '",
+                    $vtype_name,
+                    "'"
+                ))?;
+            };
+
+            let Value::Int(idx) = frame.pop_operand() else {
+                return Err("index is not an int")?;
+            };
+
+            let Value::Reference(r) = frame.pop_operand() else {
+                return Err("operand is not a reference value")?;
+            };
+            let Some(rv) = heap.get(r) else {
+                return Err("referent not found on heap")?;
+            };
+            let RefValue::Array(arr) = rv else {
+                return Err("referent is not an array")?;
+            };
+
+            arr.put(idx as usize, v);
+
+            Ok(())
+        }
+    };
+}
+
+instr_astore!(instr_iastore, Value::Int, "int");
+instr_astore!(instr_lastore, Value::Long, "long");
+instr_astore!(instr_fastore, Value::Float, "float");
+instr_astore!(instr_dastore, Value::Double, "double");
+instr_astore!(instr_aastore, Value::Reference, "reference");
+instr_astore!(instr_bastore, Value::Byte, "byte");
+instr_astore!(instr_castore, Value::Char, "char");
+instr_astore!(instr_sastore, Value::Short, "short");
 
 macro_rules! pop_operand_if_category_matches {
     ($frame:expr, $category:pat) => {{
