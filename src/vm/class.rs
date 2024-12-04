@@ -223,7 +223,65 @@ pub struct MethodDescriptor(String);
 
 impl MethodDescriptor {
     fn num_args(&self) -> usize {
-        self.0[1..].find(')').expect("malformed signature")
+        assert!(!self.0.is_empty());
+
+        let mut n = 0;
+        let mut in_ref = false; // is reading ref type?
+        for c in self.0[1..].chars() {
+            match (in_ref, c) {
+                (_, ')') => {
+                    break;
+                }
+                (_, '[') => {
+                    // skip prefix for array type
+                    continue;
+                }
+                (false, 'L') => {
+                    // enter ref type
+                    in_ref = true;
+                }
+                (false, _) => {
+                    // primitive type
+                    n += 1;
+                }
+                (true, ';') => {
+                    // leave ref type
+                    n += 1;
+                    in_ref = false;
+                }
+                (true, _) => {
+                    // skip letters in ref type
+                    continue;
+                }
+            }
+        }
+        n
+    }
+}
+
+#[cfg(test)]
+mod test_method_descriptor {
+    use super::*;
+
+    #[test]
+    fn test_num_args() {
+        let tests = vec![
+            ("()V", 0),
+            ("(I)V", 1),
+            ("(ISB)V", 3),
+            ("(Ljava/lang/String;)V", 1),
+            ("(Ljava/lang/String;ILjava/lang/String;)V", 3),
+            ("([I)", 1),
+            ("([[I[I)", 2),
+            ("([Ljava/lang/String;)V", 1),
+            ("([[Ljava/lang/String;I)V", 2),
+            ("(I[[ILjava/lang/String;[II[Ljava/lang/String;I)V", 7),
+        ];
+
+        for (input, exp) in tests {
+            let desc = MethodDescriptor(input.to_string());
+            assert_eq!(desc.num_args(), exp);
+        }
     }
 }
 

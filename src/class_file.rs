@@ -164,10 +164,6 @@ impl MethodInfo {
         (String::new(), String::new(), 0, 0, Vec::new())
     }
 
-    fn num_args(&self) -> usize {
-        self.descriptor[1..].find(')').expect("malformed signature")
-    }
-
     pub fn is_static(&self) -> bool {
         self.access_flags.contains(MethodAccessFlags::STATIC)
             && !self.access_flags.contains(MethodAccessFlags::ABSTRACT)
@@ -195,25 +191,5 @@ fn parse_method_info(bs: &mut ByteSeq, cp: &ConstantPool) -> MethodInfo {
         name: cp.get_utf8(bs.read_u16()).to_string(),
         descriptor: cp.get_utf8(bs.read_u16()).to_string(),
         attributes: parse_attributes(bs, cp),
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-
-    #[test]
-    fn test_method_info_num_args() {
-        let tests = vec![("()V", 0), ("(I)V", 1), ("(ISB)V", 3)];
-
-        for (input, exp) in tests {
-            let m = MethodInfo {
-                access_flags: MethodAccessFlags::from_bits_retain(0),
-                name: "".to_string(),
-                descriptor: input.to_string(),
-                attributes: vec![],
-            };
-            assert_eq!(m.num_args(), exp);
-        }
     }
 }
