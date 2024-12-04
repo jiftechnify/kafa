@@ -32,6 +32,15 @@ impl MethodArea {
                     .loader
                     .load(class_name)
                     .map_err(|err| format!("failed to load '{class_name}': {err}"))?;
+
+                // resolve the super class / interfaces
+                if let Some(super_cls_name) = &cls.super_class {
+                    self.lookup_class(super_cls_name)?;
+                }
+                for iface_name in &cls.interfaces {
+                    self.lookup_class(iface_name)?;
+                }
+
                 let cls = Rc::new(cls);
                 self.classes.insert(class_name.to_string(), cls.clone());
                 Ok(cls)

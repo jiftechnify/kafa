@@ -32,12 +32,24 @@ impl ClassLoader {
         for cp in self.classpath.iter() {
             match cp.extension() {
                 Some(ext) if (ext == "jar" || ext == "zip") => match self.load_from_jar(cp, name) {
-                    Ok(Some(cls)) => return Ok(cls),
+                    Ok(Some(cls)) => {
+                        if cls.name == name {
+                            return Ok(cls);
+                        } else {
+                            return Err("specified binary name and actual class name (this_class) doesn't match")?;
+                        }
+                    }
                     Ok(None) => continue, // class not found -> try next path
                     Err(e) => return Err(e)?,
                 },
                 None => match self.load_from_class(cp, name) {
-                    Ok(Some(cls)) => return Ok(cls),
+                    Ok(Some(cls)) => {
+                        if cls.name == name {
+                            return Ok(cls);
+                        } else {
+                            return Err("specified binary name and actual class name (this_class) doesn't match")?;
+                        }
+                    }
                     Ok(None) => continue, // class not found -> try next path
                     Err(e) => return Err(e)?,
                 },

@@ -13,7 +13,7 @@ pub use const_pool::{CPInfo, ConstantPool};
 pub struct ClassFile {
     pub constant_pool: ConstantPool,
     pub this_class: String,
-    pub super_class: String,
+    pub super_class: Option<String>,
     pub interfaces: Vec<String>,
     pub fields: Vec<FieldInfo>,
     pub methods: Vec<MethodInfo>,
@@ -39,12 +39,12 @@ impl ClassFile {
         bs.skip(2);
 
         // parse this_class and super_class
-        let this_class = parse_class_ref(&mut bs, &cp);
+        let this_class = parse_class_ref(&mut bs, &cp).unwrap();
         let super_class = parse_class_ref(&mut bs, &cp);
         // parse interfaces
         let ifaces_count = bs.read_u16() as usize;
         let mut interfaces = Vec::with_capacity(ifaces_count);
-        interfaces.resize_with(ifaces_count, || parse_class_ref(&mut bs, &cp));
+        interfaces.resize_with(ifaces_count, || parse_class_ref(&mut bs, &cp).unwrap());
 
         // parse fields and methods
         let fields = parse_fields(&mut bs, &cp);
@@ -63,10 +63,15 @@ impl ClassFile {
     }
 }
 
-fn parse_class_ref(bs: &mut ByteSeq, cp: &ConstantPool) -> String {
+fn parse_class_ref(bs: &mut ByteSeq, cp: &ConstantPool) -> Option<String> {
     let idx = bs.read_u16();
-    let c = cp.get_class(idx);
-    c.name.to_string()
+    match idx {
+        0 => None,
+        _ => {
+            let c = cp.get_class(idx);
+            Some(c.name.to_string())
+        }
+    }
 }
 
 bitflags! {

@@ -8,6 +8,9 @@ pub struct Class {
     pub name: String,
     const_pool: RunTimeConstantPool,
 
+    pub super_class: Option<String>,
+    pub interfaces: Vec<String>,
+
     static_fields: HashMap<String, Rc<FieldValue>>,
     static_methods: HashMap<MethodSignature, Rc<Method>>,
 
@@ -65,6 +68,8 @@ impl Class {
         Class {
             name: cls_file.this_class,
             const_pool: rtcp,
+            super_class: cls_file.super_class,
+            interfaces: cls_file.interfaces,
             static_fields,
             static_methods,
             inst_fields_info,
@@ -77,6 +82,8 @@ impl Class {
         Class {
             name: "dummy".to_string(),
             const_pool: RunTimeConstantPool::empty(),
+            super_class: None,
+            interfaces: Vec::new(),
             static_fields: HashMap::new(),
             static_methods: HashMap::new(),
             inst_fields_info: Vec::new(),
