@@ -33,6 +33,12 @@ impl Heap {
     }
 }
 
+impl Heap {
+    pub fn get(&mut self, r: usize) -> Option<&mut RefValue> {
+        self.0.get_mut(r)
+    }
+}
+
 pub enum RefValue {
     Object(Object),
     Array(Array), // TODO: consider specialized implementation for array of boolean
@@ -56,6 +62,10 @@ impl Object {
         let obj = Object { class, fields };
         RefValue::Object(obj)
     }
+
+    pub fn get_field(&self, name: &str) -> Option<&FieldValue> {
+        self.fields.get(name)
+    }
 }
 
 pub struct Array {
@@ -78,5 +88,9 @@ impl Array {
             data,
         };
         RefValue::Array(arr)
+    }
+
+    pub fn get_length(&self) -> usize {
+        self.length
     }
 }

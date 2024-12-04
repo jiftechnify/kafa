@@ -1,3 +1,5 @@
+use crate::vm::heap::RefValue;
+
 use super::class::{MethodSignature, RunTimeCPInfo as CPInfo};
 use super::frame::Frame;
 use super::heap::Heap;
@@ -207,10 +209,13 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     // TODO: implement instructions for reference type values
     0xB2 => instr_getstatic,
     0xB3 => instr_putstatic,
+    0xB4 => instr_getfield,
+    0xB5 => instr_putfield,
     0xB8 => instr_invokestatic,
     0xBB => instr_new,
     0xBC => instr_newarray,
     0xBD => instr_anewarray,
+    0xBE => instr_arraylength,
 };
 
 // no-op
@@ -1080,6 +1085,64 @@ fn instr_putstatic(
     Ok(())
 }
 
+// get a value of a class instance field
+fn instr_getfield(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
+    let fld_name = {
+        let frame = t.current_frame();
+        let idx = frame.next_param_u16();
+        let CPInfo::Fieldref { name, .. } = frame.get_cp_info(idx) else {
+            return Err("invalid fieldref")?;
+        };
+        name.clone()
+    };
+
+    let frame = t.current_frame();
+    let Value::Reference(r) = frame.pop_operand() else {
+        return Err("operand is not a reference")?;
+    };
+    let Some(rv) = heap.get(r) else {
+        return Err("referent not found on heap")?;
+    };
+    let RefValue::Object(obj) = rv else {
+        return Err("referent is not a object")?;
+    };
+    let Some(field) = obj.get_field(&fld_name) else {
+        return Err(format!("field {fld_name} not found"))?;
+    };
+
+    frame.push_operand(field.get());
+    Ok(())
+}
+
+// put a value to a class instance field
+fn instr_putfield(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
+    let fld_name = {
+        let frame = t.current_frame();
+        let idx = frame.next_param_u16();
+        let CPInfo::Fieldref { name, .. } = frame.get_cp_info(idx) else {
+            return Err("invalid fieldref")?;
+        };
+        name.clone()
+    };
+
+    let frame = t.current_frame();
+    let Value::Reference(r) = frame.pop_operand() else {
+        return Err("operand is not a reference")?;
+    };
+    let Some(rv) = heap.get(r) else {
+        return Err("referent not found on heap")?;
+    };
+    let RefValue::Object(obj) = rv else {
+        return Err("referent is not a object")?;
+    };
+    let Some(field) = obj.get_field(&fld_name) else {
+        return Err(format!("field {fld_name} not found"))?;
+    };
+
+    field.put(frame.pop_operand());
+    Ok(())
+}
+
 fn instr_invokestatic(
     t: &mut Thread,
     meth_area: &mut MethodArea,
@@ -1165,11 +1228,7 @@ fn instr_newarray(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Instru
     Ok(())
 }
 
-fn instr_anewarray(
-    t: &mut Thread,
-    meth_area: &mut MethodArea,
-    heap: &mut Heap,
-) -> InstructionResult {
+fn instr_anewarray(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
     let (length, cls_name) = {
         let frame = t.current_frame();
         let Value::Int(length) = frame.pop_operand() else {
@@ -1184,13 +1243,6 @@ fn instr_anewarray(
     };
 
     let is_array = cls_name.starts_with("[");
-
-    // if class of item is non-array, initialize
-    if !is_array {
-        let cls = meth_area.lookup_class(&cls_name)?;
-        cls.clone().initialize(t, meth_area, heap)?;
-    }
-
     let item_desc = if is_array {
         cls_name
     } else {
@@ -1200,5 +1252,22 @@ fn instr_anewarray(
     let rv = heap.alloc_array(length as usize, &item_desc);
     t.current_frame().push_operand(rv);
 
+    Ok(())
+}
+
+// get the length of an array
+fn instr_arraylength(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
+    let frame = t.current_frame();
+    let Value::Reference(r) = frame.pop_operand() else {
+        return Err("operand is not a reference")?;
+    };
+    let Some(rv) = heap.get(r) else {
+        return Err("referent not found on heap")?;
+    };
+    let RefValue::Array(arr) = rv else {
+        return Err("referent is not an array")?;
+    };
+
+    frame.push_operand(Value::Int(arr.get_length() as i32));
     Ok(())
 }
