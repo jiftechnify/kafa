@@ -1,14 +1,18 @@
 use std::{cell::Cell, collections::HashMap, rc::Rc};
 
-use crate::class_file::{CPInfo, ConstantPool};
+use crate::class_file::{CPInfo, ConstantPool, FieldInfo};
 
 use super::{method_area::MethodArea, thread::Thread, Value};
 
 pub struct Class {
     pub name: String,
     const_pool: RunTimeConstantPool,
+
     static_fields: HashMap<String, Rc<FieldValue>>,
     static_methods: HashMap<MethodSignature, Rc<Method>>,
+
+    inst_fields_info: Vec<FieldInfo>,
+    inst_methods: HashMap<MethodSignature, Rc<Method>>,
 
     init_state: Cell<ClassInitState>,
 }
@@ -18,18 +22,26 @@ impl Class {
         let rtcp = RunTimeConstantPool::from_class_file_cp(cls_file.constant_pool);
 
         let mut static_fields = HashMap::new();
-        for f in cls_file.fields.into_iter().filter(|f| f.is_static()) {
-            let fv = match f.get_const_val() {
-                // TODO: strictly speaking, this should be done within "initialization" process described in JVM spec 5.5.
-                Some(cp_info) => FieldValue::from_cp_info(cp_info),
-                None => FieldValue::default_val_of_type(&f.descriptor),
-            };
-            let fv = Rc::new(fv);
-            static_fields.insert(f.name, fv);
+        let mut inst_fields_info = Vec::new();
+        for f in cls_file.fields.into_iter() {
+            if f.is_static() {
+                let fv = match f.get_const_val() {
+                    // TODO: strictly speaking, this should be done within "initialization" process described in JVM spec 5.5.
+                    Some(cp_info) => FieldValue::from_cp_info(cp_info),
+                    None => FieldValue::default_val_of_type(&f.descriptor),
+                };
+                let fv = Rc::new(fv);
+                static_fields.insert(f.name, fv);
+            } else {
+                inst_fields_info.push(f)
+            }
         }
 
         let mut static_methods = HashMap::new();
-        for m in cls_file.methods.into_iter().filter(|m| m.is_static()) {
+        let mut inst_methods = HashMap::new();
+        for m in cls_file.methods.into_iter() {
+            let is_static = m.is_static();
+
             let (name, desc, max_stack, max_locals, code) = m.into_components();
             let sig = MethodSignature {
                 name,
@@ -42,7 +54,12 @@ impl Class {
                 code,
             };
             let method = Rc::new(method);
-            static_methods.insert(sig, method);
+
+            if is_static {
+                static_methods.insert(sig, method);
+            } else {
+                inst_methods.insert(sig, method);
+            }
         }
 
         Class {
@@ -50,6 +67,8 @@ impl Class {
             const_pool: rtcp,
             static_fields,
             static_methods,
+            inst_fields_info,
+            inst_methods,
             init_state: Cell::new(ClassInitState::BeforeInit),
         }
     }
@@ -60,6 +79,8 @@ impl Class {
             const_pool: RunTimeConstantPool::empty(),
             static_fields: HashMap::new(),
             static_methods: HashMap::new(),
+            inst_fields_info: Vec::new(),
+            inst_methods: HashMap::new(),
             init_state: Cell::new(ClassInitState::BeforeInit),
         }
     }
@@ -74,7 +95,7 @@ enum ClassInitState {
 }
 
 impl Class {
-    // execute class initialization steps described in JVM spec 5.5.
+    // executes class initialization steps described in JVM spec 5.5.
     pub(in crate::vm) fn initialize(
         self: Rc<Self>,
         thread: &mut Thread,
@@ -106,12 +127,23 @@ impl Class {
         self.static_methods.get(signature).cloned()
     }
 
+    pub fn instance_fields(&self) -> impl Iterator<Item = &FieldInfo> {
+        self.inst_fields_info.iter()
+    }
+
     pub fn get_cp_info(&self, idx: u16) -> &RunTimeCPInfo {
         self.const_pool.get_info(idx)
     }
 }
 
+#[derive(Clone)]
 pub struct FieldDescriptor(String);
+
+impl FieldDescriptor {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
 
 impl std::fmt::Display for FieldDescriptor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -145,7 +177,7 @@ impl FieldValue {
         FieldValue::from_val(val)
     }
 
-    fn default_val_of_type(desc: &str) -> Self {
+    pub fn default_val_of_type(desc: &str) -> Self {
         assert!(!desc.is_empty());
         let Some(fst_char) = desc.chars().nth(0) else {
             unreachable!()

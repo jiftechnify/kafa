@@ -1,6 +1,7 @@
 mod class;
 mod class_loader;
 mod frame;
+mod heap;
 mod instruction;
 mod method_area;
 mod thread;
