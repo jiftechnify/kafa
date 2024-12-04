@@ -131,6 +131,10 @@ pub enum CPInfo {
         class_idx: u16,
         name_and_type_idx: u16,
     },
+    InterfaceMethodref {
+        class_idx: u16,
+        name_and_type_idx: u16,
+    },
     NameAndType {
         name_idx: u16,
         descriptor_idx: u16, // format: (<param type>*)<return type>
@@ -185,6 +189,11 @@ fn parse_cp_info(bs: &mut ByteSeq) -> Result<CPInfo, Box<dyn std::error::Error +
             class_idx: bs.read_u16(),
             name_and_type_idx: bs.read_u16(),
         },
+        // CONSTANT_InterfaceMethodref
+        11 => CPInfo::InterfaceMethodref {
+            class_idx: bs.read_u16(),
+            name_and_type_idx: bs.read_u16(),
+        },
         // CONSTANT_NameAndType
         12 => CPInfo::NameAndType {
             name_idx: bs.read_u16(),
@@ -193,7 +202,7 @@ fn parse_cp_info(bs: &mut ByteSeq) -> Result<CPInfo, Box<dyn std::error::Error +
         // skip unsupported cp info type
         16 | 19 | 20 => skip_unsupported_cp_info(bs, tag, 2),
         15 => skip_unsupported_cp_info(bs, tag, 3),
-        11 | 17 | 18 => skip_unsupported_cp_info(bs, tag, 4),
+        17 | 18 => skip_unsupported_cp_info(bs, tag, 4),
         _ => {
             eprintln!("invalid cp info tag");
             unreachable!()

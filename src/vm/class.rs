@@ -358,6 +358,11 @@ pub enum RunTimeCPInfo {
         name: String,
         descriptor: String,
     },
+    InterfaceMethodref {
+        iface_name: String,
+        name: String,
+        descriptor: String,
+    },
     NameAndType {
         name: String,
         descriptor: String, // format: (<param type>*)<return type>
@@ -389,6 +394,10 @@ impl RunTimeConstantPool {
                     class_idx,
                     name_and_type_idx,
                 } => resolve_methodref(&cp, *class_idx, *name_and_type_idx),
+                CPInfo::InterfaceMethodref {
+                    class_idx,
+                    name_and_type_idx,
+                } => resolve_interface_methodref(&cp, *class_idx, *name_and_type_idx),
                 CPInfo::NameAndType {
                     name_idx,
                     descriptor_idx,
@@ -447,6 +456,26 @@ fn resolve_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPI
     };
     RunTimeCPInfo::Methodref {
         class_name,
+        name,
+        descriptor,
+    }
+}
+
+fn resolve_interface_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPInfo {
+    let Some(ConstPoolRef {
+        class_name: iface_name,
+        name,
+        descriptor,
+    }) = resolve_const_pool_ref(cp, cls_idx, nt_idx)
+    else {
+        return RunTimeCPInfo::InterfaceMethodref {
+            iface_name: String::new(),
+            name: String::new(),
+            descriptor: String::new(),
+        };
+    };
+    RunTimeCPInfo::InterfaceMethodref {
+        iface_name,
         name,
         descriptor,
     }
