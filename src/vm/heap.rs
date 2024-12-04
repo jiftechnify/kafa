@@ -20,7 +20,7 @@ impl Heap {
         self.alloc_ref_val(obj)
     }
 
-    pub fn alloc_array(&mut self, length: usize, item_desc: &FieldDescriptor) -> Value {
+    pub fn alloc_array(&mut self, length: usize, item_desc: &str) -> Value {
         let arr = Array::new(length, item_desc);
         self.alloc_ref_val(arr)
     }
@@ -35,7 +35,7 @@ impl Heap {
 
 pub enum RefValue {
     Object(Object),
-    Array(Array),
+    Array(Array), // TODO: consider specialized implementation for array of boolean
     Null,
 }
 
@@ -66,17 +66,14 @@ pub struct Array {
 
 impl Array {
     #[allow(clippy::new_ret_no_self)]
-    fn new(length: usize, item_desc: &FieldDescriptor) -> RefValue {
-        let item_desc = item_desc.clone();
-
+    fn new(length: usize, item_desc: &str) -> RefValue {
         let mut data = Vec::with_capacity(length);
-        data.resize_with(length, || {
-            FieldValue::default_val_of_type(item_desc.as_str())
-        });
+        let v = FieldValue::default_val_of_type(item_desc);
+        data.resize(length, v);
         let data = data.into(); // Vec<FieldValue> -> Box<[FieldValue]]>
 
         let arr = Array {
-            item_desc,
+            item_desc: FieldDescriptor::new(item_desc.to_string()),
             length,
             data,
         };

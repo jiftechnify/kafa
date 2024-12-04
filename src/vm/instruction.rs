@@ -209,6 +209,8 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0xB3 => instr_putstatic,
     0xB8 => instr_invokestatic,
     0xBB => instr_new,
+    0xBC => instr_newarray,
+    0xBD => instr_anewarray,
 };
 
 // no-op
@@ -1131,6 +1133,71 @@ fn instr_new(t: &mut Thread, meth_area: &mut MethodArea, heap: &mut Heap) -> Ins
     cls.clone().initialize(t, meth_area, heap)?;
 
     let rv = heap.alloc_object(cls.clone());
+    t.current_frame().push_operand(rv);
+
+    Ok(())
+}
+
+fn instr_newarray(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
+    let frame = t.current_frame();
+
+    let Value::Int(length) = frame.pop_operand() else {
+        return Err("invalid type for length of array")?;
+    };
+
+    // cf. Table 6.5.newarray-A
+    let atype = frame.next_param_u8();
+    let item_desc = match atype {
+        4 => "Z",  // boolean
+        5 => "C",  // char
+        6 => "F",  // float
+        7 => "D",  // double
+        8 => "B",  // byte
+        9 => "S",  // short
+        10 => "I", // int
+        11 => "J", // long
+        _ => unreachable!(),
+    };
+
+    let rv = heap.alloc_array(length as usize, item_desc);
+    t.current_frame().push_operand(rv);
+
+    Ok(())
+}
+
+fn instr_anewarray(
+    t: &mut Thread,
+    meth_area: &mut MethodArea,
+    heap: &mut Heap,
+) -> InstructionResult {
+    let (length, cls_name) = {
+        let frame = t.current_frame();
+        let Value::Int(length) = frame.pop_operand() else {
+            return Err("invalid type for length of array")?;
+        };
+
+        let idx = frame.next_param_u16();
+        let CPInfo::Class { name } = frame.get_cp_info(idx) else {
+            return Err("not class")?;
+        };
+        (length, name.clone())
+    };
+
+    let is_array = cls_name.starts_with("[");
+
+    // if class of item is non-array, initialize
+    if !is_array {
+        let cls = meth_area.lookup_class(&cls_name)?;
+        cls.clone().initialize(t, meth_area, heap)?;
+    }
+
+    let item_desc = if is_array {
+        cls_name
+    } else {
+        format!("L{cls_name};")
+    };
+
+    let rv = heap.alloc_array(length as usize, &item_desc);
     t.current_frame().push_operand(rv);
 
     Ok(())

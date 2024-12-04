@@ -141,6 +141,10 @@ impl Class {
 pub struct FieldDescriptor(String);
 
 impl FieldDescriptor {
+    pub fn new(raw: String) -> FieldDescriptor {
+        Self(raw)
+    }
+
     pub fn as_str(&self) -> &str {
         &self.0
     }
