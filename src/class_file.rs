@@ -9,9 +9,25 @@ use attr::{parse_attributes, Attribute};
 use bitflags::bitflags;
 pub use const_pool::{CPInfo, ConstantPool};
 
+bitflags! {
+    #[derive(Debug)]
+    pub struct ClassAccessFlags: u16 {
+        const PUBLIC = 0x0001;
+        const FINAL = 0x0010;
+        const SUPER = 0x0020;
+        const INTERFACE = 0x0200;
+        const ABSTRACT = 0x0400;
+        const SYNTHETIC = 0x1000;
+        const ANNOTATION = 0x2000;
+        const ENUM = 0x4000;
+        const MODULE = 0x8000;
+    }
+}
+
 #[derive(Debug)]
 pub struct ClassFile {
     pub constant_pool: ConstantPool,
+    pub access_flags: ClassAccessFlags,
     pub this_class: String,
     pub super_class: Option<String>,
     pub interfaces: Vec<String>,
@@ -36,7 +52,7 @@ impl ClassFile {
         let cp = ConstantPool::parse(&mut bs)?;
 
         // skip access_flags
-        bs.skip(2);
+        let access_flags = ClassAccessFlags::from_bits_retain(bs.read_u16());
 
         // parse this_class and super_class
         let this_class = parse_class_ref(&mut bs, &cp).unwrap();
@@ -54,6 +70,7 @@ impl ClassFile {
 
         Ok(ClassFile {
             constant_pool: cp,
+            access_flags,
             this_class,
             super_class,
             interfaces,
