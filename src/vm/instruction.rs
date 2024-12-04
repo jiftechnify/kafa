@@ -1426,7 +1426,11 @@ fn instr_newarray(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Instru
     Ok(())
 }
 
-fn instr_anewarray(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
+fn instr_anewarray(
+    t: &mut Thread,
+    meth_area: &mut MethodArea,
+    heap: &mut Heap,
+) -> InstructionResult {
     let (length, cls_name) = {
         let frame = t.current_frame();
         let Value::Int(length) = frame.pop_operand() else {
@@ -1439,6 +1443,10 @@ fn instr_anewarray(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Instr
         };
         (length, name.clone())
     };
+
+    // resolve the "innermost" class of array element
+    let innermost_cls_name = cls_name.trim_start_matches('[');
+    _ = meth_area.lookup_class(innermost_cls_name);
 
     let is_array = cls_name.starts_with("[");
     let item_desc = if is_array {
