@@ -128,6 +128,10 @@ impl Class {
         self.static_methods.get(signature).cloned()
     }
 
+    pub fn lookup_instance_method(&self, signature: &MethodSignature) -> Option<Rc<Method>> {
+        self.inst_methods.get(signature).cloned()
+    }
+
     pub fn instance_fields(&self) -> impl Iterator<Item = &FieldInfo> {
         self.inst_fields_info.iter()
     }

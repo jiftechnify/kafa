@@ -211,6 +211,8 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0xB3 => instr_putstatic,
     0xB4 => instr_getfield,
     0xB5 => instr_putfield,
+    0xB6 => instr_invokevirtual,
+    0xB7 => instr_invokespecial,
     0xB8 => instr_invokestatic,
     0xBB => instr_new,
     0xBC => instr_newarray,
@@ -1098,7 +1100,7 @@ fn instr_getfield(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Instru
 
     let frame = t.current_frame();
     let Value::Reference(r) = frame.pop_operand() else {
-        return Err("operand is not a reference")?;
+        return Err("operand is not a reference value")?;
     };
     let Some(rv) = heap.get(r) else {
         return Err("referent not found on heap")?;
@@ -1127,7 +1129,7 @@ fn instr_putfield(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Instru
 
     let frame = t.current_frame();
     let Value::Reference(r) = frame.pop_operand() else {
-        return Err("operand is not a reference")?;
+        return Err("operand is not a reference value")?;
     };
     let Some(rv) = heap.get(r) else {
         return Err("referent not found on heap")?;
@@ -1140,6 +1142,98 @@ fn instr_putfield(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Instru
     };
 
     field.put(frame.pop_operand());
+    Ok(())
+}
+
+fn instr_invokevirtual(
+    t: &mut Thread,
+    meth_area: &mut MethodArea,
+    heap: &mut Heap,
+) -> InstructionResult {
+    let (_cls_name, meth_name, desc) = {
+        let frame = t.current_frame();
+        let idx = frame.next_param_u16();
+        let CPInfo::Methodref {
+            class_name,
+            name,
+            descriptor,
+        } = frame.get_cp_info(idx)
+        else {
+            return Err("invalid methodref")?;
+        };
+        (class_name.clone(), name.clone(), descriptor.clone())
+    };
+    // TODO: resolve class from `class_name` in methodref
+
+    let frame = t.current_frame();
+    let this @ Value::Reference(r) = frame.pop_operand() else {
+        return Err("operand is not a reference value")?;
+    };
+    let Some(rv) = heap.get(r) else {
+        return Err("referent not found on heap")?;
+    };
+    let RefValue::Object(obj) = rv else {
+        return Err("referent is not a object")?;
+    };
+
+    // lookup method to be called
+    let rt_cls = obj.get_class();
+    let sig = MethodSignature::new(&meth_name, &desc);
+    let meth = meth_area.lookup_instance_method("TODO", &rt_cls, &sig)?;
+    let num_args = meth.num_args();
+
+    // method call
+    // create new frame for the method, transfer the receiver(`this`) and args to the frame, then push onto frame stack
+    let caller_frame = t.current_frame();
+    let mut callee_frame = Frame::new(rt_cls, meth);
+    Frame::transfer_receiver_and_args(caller_frame, &mut callee_frame, this, num_args);
+    t.push_frame(callee_frame);
+
+    Ok(())
+}
+
+fn instr_invokespecial(
+    t: &mut Thread,
+    meth_area: &mut MethodArea,
+    _: &mut Heap,
+) -> InstructionResult {
+    let (cls_name, meth_name, desc) = {
+        let frame = t.current_frame();
+        let idx = frame.next_param_u16();
+        let CPInfo::Methodref {
+            class_name,
+            name,
+            descriptor,
+        } = frame.get_cp_info(idx)
+        else {
+            return Err("invalid methodref")?;
+        };
+        (class_name.clone(), name.clone(), descriptor.clone())
+    };
+    if meth_name != "<init>" {
+        Err("invoking methods other than <init> is currently not supported")?;
+    }
+
+    let frame = t.current_frame();
+    let this @ Value::Reference(_) = frame.pop_operand() else {
+        return Err("operand is not a reference value")?;
+    };
+
+    // lookup method to be called
+    let cls = meth_area.lookup_class(&cls_name)?;
+    let sig = MethodSignature::new(&meth_name, &desc);
+    let meth = cls
+        .lookup_instance_method(&sig)
+        .ok_or("instance method {cls.name}.{sig} not found")?;
+    let num_args = meth.num_args();
+
+    // method call
+    // create new frame for the method, transfer the receiver(`this`) and args to the frame, then push onto frame stack
+    let caller_frame = t.current_frame();
+    let mut callee_frame = Frame::new(cls, meth);
+    Frame::transfer_receiver_and_args(caller_frame, &mut callee_frame, this, num_args);
+    t.push_frame(callee_frame);
+
     Ok(())
 }
 
@@ -1259,7 +1353,7 @@ fn instr_anewarray(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Instr
 fn instr_arraylength(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
     let Value::Reference(r) = frame.pop_operand() else {
-        return Err("operand is not a reference")?;
+        return Err("operand is not a reference value")?;
     };
     let Some(rv) = heap.get(r) else {
         return Err("referent not found on heap")?;

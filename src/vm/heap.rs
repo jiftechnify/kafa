@@ -63,6 +63,10 @@ impl Object {
         RefValue::Object(obj)
     }
 
+    pub fn get_class(&self) -> Rc<Class> {
+        self.class.clone()
+    }
+
     pub fn get_field(&self, name: &str) -> Option<&FieldValue> {
         self.fields.get(name)
     }

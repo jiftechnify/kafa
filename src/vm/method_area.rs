@@ -61,4 +61,16 @@ impl MethodArea {
                 .ok_or_else(|| "static method '{class_name}.{sig}' not found".into())
         })
     }
+
+    pub fn lookup_instance_method(
+        &mut self,
+        _resolved_class_name: &str,
+        runtime_class: &Class,
+        sig: &MethodSignature,
+    ) -> Result<Rc<Method>, Box<dyn std::error::Error>> {
+        // TODO: implement method selection algorithm that take account of override relations (JVM spec 5.4.6.)
+        runtime_class
+            .lookup_instance_method(sig)
+            .ok_or_else(|| "instance method '{runtime_class.name}.{sig} not found'".into())
+    }
 }

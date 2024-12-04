@@ -116,30 +116,41 @@ impl Frame {
         self.push_operand(*v);
     }
 
-    // 呼び出すメソッドにn個の引数を渡す処理
+    // 呼び出すメソッドにn個の引数を渡す。staticメソッドの呼び出し時に利用
+    //
     // 呼び出し元フレームのスタックトップからn個ぶんの値を、呼び出し先フレームのローカル変数の先頭n個ぶんの値としてセット
     //
     // caller stack:    ..., arg1, arg2, ... , argN (stack top)
     //                         ↓     ↓           ↓
     // callee locals: (head) prm1, prm2, ... , prmN, ...
     pub fn transfer_args(caller: &mut Self, callee: &mut Self, n: usize) {
-        let mut locals_rev: Vec<Option<Value>> = Vec::new();
+        callee.set_locals(0, caller.pop_args(n).as_slice());
+    }
+
+    // 呼び出すメソッドに、そのメソッドのレシーバ(`this`)とn個の引数を渡す。インスタンスメソッドの呼び出し時に利用
+    //
+    // レシーバとなる値は、呼び出し元フレームのスタックからすでにpopされている前提
+    pub fn transfer_receiver_and_args(caller: &mut Self, callee: &mut Self, this: Value, n: usize) {
+        assert!(matches!(this, Value::Reference(_)));
+        callee.set_local(0, this);
+        callee.set_locals(1, caller.pop_args(n).as_slice());
+    }
+
+    fn pop_args(&mut self, n: usize) -> Vec<Option<Value>> {
+        let mut args_rev: Vec<Option<Value>> = Vec::new();
         for _ in (0..n).rev() {
-            let arg = caller.pop_operand();
+            let arg = self.pop_operand();
             match arg {
                 // JVMの仕様上、Long/Doubleは連続する2スロットを消費
                 // この実装では、1スロット目に実際の値を入れ、2スロット目は空にする
                 Value::Long(_) | Value::Double(_) => {
-                    locals_rev.push(None);
-                    locals_rev.push(Some(arg));
+                    args_rev.push(None);
+                    args_rev.push(Some(arg));
                 }
-                _ => locals_rev.push(Some(arg)),
+                _ => args_rev.push(Some(arg)),
             }
         }
-        callee.set_locals(
-            0,
-            locals_rev.into_iter().rev().collect::<Vec<_>>().as_slice(),
-        );
+        args_rev.into_iter().rev().collect()
     }
 
     /* Constant Poolの参照 */
