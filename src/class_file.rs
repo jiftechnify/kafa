@@ -10,7 +10,7 @@ use bitflags::bitflags;
 pub use const_pool::{CPInfo, ConstantPool};
 
 bitflags! {
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     pub struct ClassAccessFlags: u16 {
         const PUBLIC = 0x0001;
         const FINAL = 0x0010;
@@ -21,6 +21,12 @@ bitflags! {
         const ANNOTATION = 0x2000;
         const ENUM = 0x4000;
         const MODULE = 0x8000;
+    }
+}
+
+impl ClassAccessFlags {
+    pub fn is_interface(&self) -> bool {
+        self.contains(ClassAccessFlags::INTERFACE)
     }
 }
 
@@ -92,7 +98,7 @@ fn parse_class_ref(bs: &mut ByteSeq, cp: &ConstantPool) -> Option<String> {
 }
 
 bitflags! {
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     pub struct FieldAccessFlags: u16 {
         const PUBLIC = 0x0001;
         const PRIVATE = 0x0002;
@@ -106,9 +112,15 @@ bitflags! {
     }
 }
 
+impl FieldAccessFlags {
+    pub fn is_static(&self) -> bool {
+        self.contains(FieldAccessFlags::STATIC)
+    }
+}
+
 #[derive(Debug)]
 pub struct FieldInfo {
-    access_flags: FieldAccessFlags,
+    pub access_flags: FieldAccessFlags,
     pub name: String,
     pub descriptor: String,
     attributes: Vec<Attribute>,
@@ -122,10 +134,6 @@ impl FieldInfo {
             }
         }
         None
-    }
-
-    pub fn is_static(&self) -> bool {
-        self.access_flags.contains(FieldAccessFlags::STATIC)
     }
 }
 
@@ -148,7 +156,7 @@ fn parse_field_info(bs: &mut ByteSeq, cp: &ConstantPool) -> FieldInfo {
 }
 
 bitflags! {
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     pub struct MethodAccessFlags: u16 {
         const PUBLIC = 0x0001;
         const PRIVATE = 0x0002;
@@ -162,6 +170,67 @@ bitflags! {
         const ABSTRACT =  0x0400;
         const STRICT = 0x0800;
         const SYNTHETIC = 0x1000;
+    }
+}
+
+impl MethodAccessFlags {
+    pub fn is_static(&self) -> bool {
+        self.contains(MethodAccessFlags::STATIC) && !self.contains(MethodAccessFlags::ABSTRACT)
+    }
+
+    pub fn is_non_abstract_and_non_static(&self) -> bool {
+        !self.intersects(MethodAccessFlags::ABSTRACT | MethodAccessFlags::STATIC)
+    }
+
+    /// whether the method should have Code attribute? == neither native nor abstract
+    pub fn should_have_code(&self) -> bool {
+        !self.intersects(MethodAccessFlags::NATIVE | MethodAccessFlags::ABSTRACT)
+    }
+}
+
+#[cfg(test)]
+mod test_meth_access_flags {
+    use super::MethodAccessFlags;
+
+    #[test]
+    fn test_is_static() {
+        let tests = [
+            (MethodAccessFlags::empty(), false),
+            (MethodAccessFlags::STATIC, true),
+            (MethodAccessFlags::PUBLIC | MethodAccessFlags::STATIC, true),
+            (MethodAccessFlags::FINAL, false),
+            (
+                MethodAccessFlags::STATIC | MethodAccessFlags::ABSTRACT,
+                false,
+            ),
+            (MethodAccessFlags::all() - MethodAccessFlags::ABSTRACT, true),
+            (MethodAccessFlags::all(), false),
+        ];
+        for (flags, exp) in tests {
+            assert_eq!(flags.is_static(), exp);
+        }
+    }
+
+    #[test]
+    fn is_non_abstract_and_non_static() {
+        let tests = [
+            (MethodAccessFlags::empty(), true),
+            (MethodAccessFlags::PUBLIC, true),
+            (MethodAccessFlags::ABSTRACT, false),
+            (MethodAccessFlags::STATIC, false),
+            (
+                MethodAccessFlags::ABSTRACT | MethodAccessFlags::STATIC,
+                false,
+            ),
+            (
+                MethodAccessFlags::all() - MethodAccessFlags::ABSTRACT - MethodAccessFlags::STATIC,
+                true,
+            ),
+            (MethodAccessFlags::all(), false),
+        ];
+        for (flags, exp) in tests {
+            assert_eq!(flags.is_non_abstract_and_non_static(), exp);
+        }
     }
 }
 

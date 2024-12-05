@@ -1,12 +1,16 @@
 use std::{cell::Cell, collections::HashMap, rc::Rc};
 
-use crate::class_file::{CPInfo, ConstantPool, FieldInfo};
+use crate::class_file::{
+    CPInfo, ClassAccessFlags, ConstantPool, FieldInfo, MethodAccessFlags, MethodComponents,
+};
 
 use super::{heap::Heap, method_area::MethodArea, thread::Thread, Value};
 
 pub struct Class {
     pub name: String,
     const_pool: RunTimeConstantPool,
+
+    pub access_flags: ClassAccessFlags,
 
     pub super_class: Option<String>,
     pub interfaces: Vec<String>,
@@ -27,7 +31,7 @@ impl Class {
         let mut static_fields = HashMap::new();
         let mut inst_fields_info = Vec::new();
         for f in cls_file.fields.into_iter() {
-            if f.is_static() {
+            if f.access_flags.is_static() {
                 let fv = match f.get_const_val() {
                     // TODO: strictly speaking, this should be done within "initialization" process described in JVM spec 5.5.
                     Some(cp_info) => FieldValue::from_cp_info(cp_info),
@@ -51,6 +55,7 @@ impl Class {
                 descriptor: MethodDescriptor(desc),
             };
             let method = Method {
+                access_flags,
                 signature: sig.clone(),
                 max_stack,
                 max_locals,
@@ -58,7 +63,7 @@ impl Class {
             };
             let method = Rc::new(method);
 
-            if is_static {
+            if method.access_flags.is_static() {
                 static_methods.insert(sig, method);
             } else {
                 inst_methods.insert(sig, method);
@@ -68,6 +73,7 @@ impl Class {
         Class {
             name: cls_file.this_class,
             const_pool: rtcp,
+            access_flags: cls_file.access_flags,
             super_class: cls_file.super_class,
             interfaces: cls_file.interfaces,
             static_fields,
@@ -82,6 +88,7 @@ impl Class {
         Class {
             name: "dummy".to_string(),
             const_pool: RunTimeConstantPool::empty(),
+            access_flags: ClassAccessFlags::empty(),
             super_class: None,
             interfaces: Vec::new(),
             static_fields: HashMap::new(),
@@ -333,11 +340,13 @@ impl Default for MethodSignature {
 
 #[derive(Clone)]
 pub struct Method {
+    pub access_flags: MethodAccessFlags,
     pub signature: MethodSignature,
     pub max_stack: u16,
     pub max_locals: u16,
     pub code: Vec<u8>,
 }
+
 impl Method {
     pub fn num_args(&self) -> usize {
         self.signature.descriptor.num_args()
