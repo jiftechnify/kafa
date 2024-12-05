@@ -133,14 +133,48 @@ impl Class {
             return Ok(());
         };
         self.init_state.set(InProgress);
+
+        // initialize superclass & superinterfaces that declare non-abstract & non-static methods, recursively (step 7)
+        if !self.access_flags.is_interface() {
+            for sc in self.superclasses_to_be_initialized(meth_area)? {
+                sc.initialize(thread, meth_area, heap)?;
+            }
+        }
+
+        // execute <clinit> of the class/interface (step 9)
         thread
             .exec_class_initialization(meth_area, heap, self.clone())
             .inspect(|_| {
                 self.init_state.set(Succeeded);
             })
-            .inspect_err(|_| {
+            .inspect_err(|err| {
+                eprintln!("failed to initialize class '{}': {err}", &self.name);
                 self.init_state.set(Failed);
             })
+    }
+
+    fn superclasses_to_be_initialized(
+        &self,
+        meth_area: &mut MethodArea,
+    ) -> Result<Vec<Rc<Class>>, Box<dyn std::error::Error>> {
+        let mut res = Vec::new();
+        if let Some(ref sc_name) = self.super_class {
+            let sc = meth_area.lookup_class(sc_name)?;
+            res.push(sc);
+        }
+
+        // pick superinterfaces that declare non-abstract & non-static methods
+        for iface_name in self.interfaces.iter() {
+            let iface = meth_area.lookup_class(iface_name)?;
+            if iface
+                .inst_methods
+                .values()
+                .any(|m| !m.access_flags.is_abstract())
+            {
+                res.push(iface);
+            }
+        }
+        Ok(res)
     }
 }
 

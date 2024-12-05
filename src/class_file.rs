@@ -178,8 +178,8 @@ impl MethodAccessFlags {
         self.contains(MethodAccessFlags::STATIC) && !self.contains(MethodAccessFlags::ABSTRACT)
     }
 
-    pub fn is_non_abstract_and_non_static(&self) -> bool {
-        !self.intersects(MethodAccessFlags::ABSTRACT | MethodAccessFlags::STATIC)
+    pub fn is_abstract(&self) -> bool {
+        self.contains(MethodAccessFlags::ABSTRACT)
     }
 
     /// whether the method should have Code attribute? == neither native nor abstract
@@ -212,24 +212,20 @@ mod test_meth_access_flags {
     }
 
     #[test]
-    fn is_non_abstract_and_non_static() {
+    fn test_should_have_code() {
         let tests = [
             (MethodAccessFlags::empty(), true),
             (MethodAccessFlags::PUBLIC, true),
             (MethodAccessFlags::ABSTRACT, false),
-            (MethodAccessFlags::STATIC, false),
+            (MethodAccessFlags::NATIVE, false),
             (
-                MethodAccessFlags::ABSTRACT | MethodAccessFlags::STATIC,
-                false,
-            ),
-            (
-                MethodAccessFlags::all() - MethodAccessFlags::ABSTRACT - MethodAccessFlags::STATIC,
+                MethodAccessFlags::all() - MethodAccessFlags::ABSTRACT - MethodAccessFlags::NATIVE,
                 true,
             ),
             (MethodAccessFlags::all(), false),
         ];
         for (flags, exp) in tests {
-            assert_eq!(flags.is_non_abstract_and_non_static(), exp);
+            assert_eq!(flags.should_have_code(), exp);
         }
     }
 }
