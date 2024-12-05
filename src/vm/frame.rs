@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use super::{
-    class::{Class, Method, MethodSignature, RunTimeCPInfo},
+    class::{Class, Method, MethodCodeSpec, MethodSignature, RunTimeCPInfo},
     value::Value,
 };
 use crate::support::ByteSeq;
@@ -17,11 +17,19 @@ pub struct Frame {
 
 impl Frame {
     pub fn new(class: Rc<Class>, method: Rc<Method>) -> Frame {
-        let code_reader = ByteSeq::new(method.code.as_slice()).unwrap();
+        let Some(MethodCodeSpec {
+            max_stack,
+            max_locals,
+            code,
+        }) = &method.code_spec
+        else {
+            unreachable!("method to be executed on JVM frame must have code spec");
+        };
+        let code_reader = ByteSeq::new(code.as_slice()).unwrap();
 
         Frame {
-            locals: vec![Option::default(); method.max_locals as usize],
-            op_stack: Vec::with_capacity(method.max_stack as usize),
+            locals: vec![Option::default(); *max_locals as usize],
+            op_stack: Vec::with_capacity(*max_stack as usize),
             class,
             meth_sig: method.signature.clone(),
             code: code_reader,

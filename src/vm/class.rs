@@ -47,19 +47,30 @@ impl Class {
         let mut static_methods = HashMap::new();
         let mut inst_methods = HashMap::new();
         for m in cls_file.methods.into_iter() {
-            let is_static = m.is_static();
+            let MethodComponents {
+                access_flags,
+                name,
+                descriptor,
+                code_attr,
+            } = m.into_components();
 
-            let (name, desc, max_stack, max_locals, code) = m.into_components();
+            // TODO: abstract/native methods
+            let Some(code_attr) = code_attr else {
+                unreachable!();
+            };
+
             let sig = MethodSignature {
                 name,
-                descriptor: MethodDescriptor(desc),
+                descriptor: MethodDescriptor(descriptor),
             };
             let method = Method {
                 access_flags,
                 signature: sig.clone(),
-                max_stack,
-                max_locals,
-                code,
+                code_spec: Some(MethodCodeSpec {
+                    max_stack: code_attr.max_stack,
+                    max_locals: code_attr.max_locals,
+                    code: code_attr.code,
+                }),
             };
             let method = Rc::new(method);
 
@@ -339,12 +350,17 @@ impl Default for MethodSignature {
 }
 
 #[derive(Clone)]
-pub struct Method {
-    pub access_flags: MethodAccessFlags,
-    pub signature: MethodSignature,
+pub struct MethodCodeSpec {
     pub max_stack: u16,
     pub max_locals: u16,
     pub code: Vec<u8>,
+}
+
+#[derive(Clone)]
+pub struct Method {
+    pub access_flags: MethodAccessFlags,
+    pub signature: MethodSignature,
+    pub code_spec: Option<MethodCodeSpec>,
 }
 
 impl Method {

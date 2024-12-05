@@ -5,7 +5,7 @@ use crate::support::ByteSeq;
 mod attr;
 mod const_pool;
 
-use attr::{parse_attributes, Attribute};
+use attr::{parse_attributes, Attribute, CodeAttr};
 use bitflags::bitflags;
 pub use const_pool::{CPInfo, ConstantPool};
 
@@ -242,27 +242,37 @@ pub struct MethodInfo {
     attributes: Vec<Attribute>,
 }
 
+pub struct MethodComponents {
+    pub access_flags: MethodAccessFlags,
+    pub name: String,
+    pub descriptor: String,
+
+    pub code_attr: Option<CodeAttr>,
+}
+
 impl MethodInfo {
-    // TODO: refactor this
-    pub fn into_components(self) -> (String, String, u16, u16, Vec<u8>) {
+    pub fn into_components(self) -> MethodComponents {
         for attr in self.attributes.into_iter() {
             if let Attribute::Code(c) = attr {
-                return (
-                    self.name,
-                    self.descriptor,
-                    c.max_stack,
-                    c.max_locals,
-                    c.code,
-                );
+                return MethodComponents {
+                    access_flags: self.access_flags,
+                    name: self.name,
+                    descriptor: self.descriptor,
+                    code_attr: Some(c),
+                };
             }
         }
-        eprintln!("Code attr not found");
-        (String::new(), String::new(), 0, 0, Vec::new())
-    }
 
-    pub fn is_static(&self) -> bool {
-        self.access_flags.contains(MethodAccessFlags::STATIC)
-            && !self.access_flags.contains(MethodAccessFlags::ABSTRACT)
+        if self.access_flags.should_have_code() {
+            unreachable!("MethodInfo must have Code attribute!");
+        } else {
+            MethodComponents {
+                access_flags: self.access_flags,
+                name: self.name,
+                descriptor: self.descriptor,
+                code_attr: None,
+            }
+        }
     }
 }
 
