@@ -41,7 +41,7 @@ impl Thread {
         let caller = self.current_frame();
 
         // lookup method to be called
-        let cls = meth_area.lookup_class(class_name)?;
+        let cls = meth_area.resolve_class(class_name)?;
         let Some(meth) = cls.lookup_static_method(sig) else {
             return Err(format!("static method {class_name}.{sig} not found"))?;
         };

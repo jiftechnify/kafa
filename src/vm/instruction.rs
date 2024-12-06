@@ -1154,11 +1154,11 @@ fn instr_getstatic(
         (class_name.clone(), name.clone())
     };
 
-    let cls = meth_area.lookup_class(&cls_name)?;
+    let cls = meth_area.resolve_class(&cls_name)?;
     cls.initialize(t, meth_area, heap)?;
 
     let frame = t.current_frame();
-    let field = meth_area.lookup_static_field(&cls_name, &fld_name)?;
+    let field = meth_area.resolve_static_field(&cls_name, &fld_name)?;
     frame.push_operand(field.get());
     Ok(())
 }
@@ -1182,11 +1182,11 @@ fn instr_putstatic(
         (class_name.clone(), name.clone())
     };
 
-    let cls = meth_area.lookup_class(&cls_name)?;
+    let cls = meth_area.resolve_class(&cls_name)?;
     cls.initialize(t, meth_area, heap)?;
 
     let frame = t.current_frame();
-    let field = meth_area.lookup_static_field(&cls_name, &fld_name)?;
+    let field = meth_area.resolve_static_field(&cls_name, &fld_name)?;
     field.put(frame.pop_operand());
     Ok(())
 }
@@ -1267,8 +1267,10 @@ fn instr_invokevirtual(
         };
         (class_name.clone(), name.clone(), descriptor.clone())
     };
-    // TODO: resolve class from `class_name` in methodref
+    // resolve class referenced by method ref
+    let _ = meth_area.resolve_class(&ref_cls_name)?;
 
+    // get receiver object
     let frame = t.current_frame();
     let this @ Value::Reference(r) = frame.pop_operand() else {
         return Err("operand is not a reference value")?;
@@ -1324,7 +1326,7 @@ fn instr_invokespecial(
     };
 
     // lookup method to be called
-    let cls = meth_area.lookup_class(&cls_name)?;
+    let cls = meth_area.resolve_class(&cls_name)?;
     let sig = MethodSignature::new(&meth_name, &desc);
     let meth = cls
         .lookup_instance_method(&sig)
@@ -1362,7 +1364,7 @@ fn instr_invokestatic(
         (class_name.clone(), name.clone(), descriptor.clone())
     };
 
-    let cls = meth_area.lookup_class(&cls_name)?;
+    let cls = meth_area.resolve_class(&cls_name)?;
     cls.initialize(t, meth_area, heap)?;
 
     // lookup method to be called
@@ -1390,7 +1392,7 @@ fn instr_new(t: &mut Thread, meth_area: &mut MethodArea, heap: &mut Heap) -> Ins
         name
     };
 
-    let cls = meth_area.lookup_class(cls_name)?;
+    let cls = meth_area.resolve_class(cls_name)?;
     cls.clone().initialize(t, meth_area, heap)?;
 
     let rv = heap.alloc_object(cls.clone());
@@ -1446,7 +1448,7 @@ fn instr_anewarray(
 
     // resolve the "innermost" class of array element
     let innermost_cls_name = cls_name.trim_start_matches('[');
-    _ = meth_area.lookup_class(innermost_cls_name);
+    _ = meth_area.resolve_class(innermost_cls_name);
 
     let is_array = cls_name.starts_with("[");
     let item_desc = if is_array {

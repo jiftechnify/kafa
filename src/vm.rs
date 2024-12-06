@@ -47,7 +47,7 @@ impl VM {
         let mut heap = Heap::new();
 
         // initialize class
-        let init_cls = meth_area.lookup_class(class_name)?;
+        let init_cls = meth_area.resolve_class(class_name)?;
         init_cls.initialize(&mut self.thread, &mut meth_area, &mut heap)?;
 
         // execute bootstrap method

@@ -159,13 +159,13 @@ impl Class {
     ) -> Result<Vec<Rc<Class>>, Box<dyn std::error::Error>> {
         let mut res = Vec::new();
         if let Some(ref sc_name) = self.super_class {
-            let sc = meth_area.lookup_class(sc_name)?;
+            let sc = meth_area.resolve_class(sc_name)?;
             res.push(sc);
         }
 
         // pick superinterfaces that declare non-abstract & non-static methods
         for iface_name in self.interfaces.iter() {
-            let iface = meth_area.lookup_class(iface_name)?;
+            let iface = meth_area.resolve_class(iface_name)?;
             if iface
                 .inst_methods
                 .values()
