@@ -186,6 +186,17 @@ impl MethodAccessFlags {
     pub fn should_have_code(&self) -> bool {
         !self.intersects(MethodAccessFlags::NATIVE | MethodAccessFlags::ABSTRACT)
     }
+
+    pub fn is_public_non_static(&self) -> bool {
+        self.contains(MethodAccessFlags::PUBLIC) && !self.contains(MethodAccessFlags::STATIC)
+    }
+
+    /// whether the method is `default` interface method?
+    pub fn is_interface_default(&self) -> bool {
+        !self.intersects(
+            MethodAccessFlags::PRIVATE | MethodAccessFlags::STATIC | MethodAccessFlags::ABSTRACT,
+        )
+    }
 }
 
 #[cfg(test)]

@@ -72,7 +72,7 @@ impl Object {
         let mut fields = HashMap::new();
 
         let mut classes = meth_area
-            .lookup_all_superclasses(&base_cls.name)
+            .collect_all_superclasses(&base_cls.name)
             .inspect_err(|err| eprintln!("{}", err))
             .unwrap();
         classes.push(base_cls.clone());

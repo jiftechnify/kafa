@@ -1260,7 +1260,7 @@ fn instr_invokevirtual(
     meth_area: &mut MethodArea,
     heap: &mut Heap,
 ) -> InstructionResult {
-    let (_cls_name, meth_name, desc) = {
+    let (ref_cls_name, meth_name, desc) = {
         let frame = t.current_frame();
         let idx = frame.next_param_u16();
         let CPInfo::Methodref {
@@ -1273,8 +1273,9 @@ fn instr_invokevirtual(
         };
         (class_name.clone(), name.clone(), descriptor.clone())
     };
-    // resolve class referenced by method ref
-    let _ = meth_area.resolve_class(&ref_cls_name)?;
+    // resolve method referenced by method ref
+    let sig = MethodSignature::new(&meth_name, &desc);
+    let resolved_meth = meth_area.resolve_instance_method(&ref_cls_name, &sig)?;
 
     // get receiver object
     let frame = t.current_frame();
@@ -1288,10 +1289,9 @@ fn instr_invokevirtual(
         return Err("referent is not a object")?;
     };
 
-    // lookup method to be called
+    // select method to be called
     let rt_cls = obj.get_class();
-    let sig = MethodSignature::new(&meth_name, &desc);
-    let meth = meth_area.lookup_instance_method("TODO", &rt_cls, &sig)?;
+    let meth = meth_area.select_instance_method(&rt_cls, resolved_meth)?;
     let num_args = meth.num_args();
 
     // method call
