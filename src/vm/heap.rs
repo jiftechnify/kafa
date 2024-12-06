@@ -46,6 +46,44 @@ pub enum RefValue {
     Null,
 }
 
+impl RefValue {
+    const SUPERTYPES_OF_ARRAY: [&str; 3] = [
+        "java/lang/Object",
+        "java/lang/Cloneable",
+        "java/io/Serializable",
+    ];
+    pub fn is_instance_of(&self, target_cls_name: &str, meth_area: &MethodArea) -> bool {
+        match self {
+            RefValue::Object(obj) => meth_area.is_subclass_of(&obj.class.name, target_cls_name),
+            RefValue::Array(arr) => {
+                let mut sc = arr.desc.as_str();
+                let mut tc = target_cls_name;
+
+                // peel array prefix ('[') one by one until either of them hit non-array component
+                while sc.starts_with("[") && tc.starts_with("[") {
+                    sc = &sc[1..];
+                    tc = &tc[1..];
+                }
+
+                // SC is array type -> TC is a supertype of any array type?
+                if sc.starts_with("[") && tc.starts_with("L") {
+                    let targ_cls_name = &tc[1..]; // remove prefix 'L'
+                    return RefValue::SUPERTYPES_OF_ARRAY
+                        .iter()
+                        .any(|st| targ_cls_name == *st);
+                }
+                // TC and SC are reference types -> SC can be cast to TC?
+                if sc.starts_with("L") && tc.starts_with("L") {
+                    return meth_area.is_subclass_of(&sc[1..], &tc[1..]);
+                }
+                // TC and SC are the same primitive type?
+                sc.len() == 1 && tc.len() == 1 && sc == tc
+            }
+            RefValue::Null => false,
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct InstanceFieldIdent {
     class_name: String,
@@ -103,7 +141,7 @@ impl Object {
 }
 
 pub struct Array {
-    item_desc: FieldDescriptor,
+    desc: FieldDescriptor,
     length: usize,
     data: Box<[FieldValue]>,
 }
@@ -117,7 +155,8 @@ impl Array {
         let data = data.into(); // Vec<FieldValue> -> Box<[FieldValue]]>
 
         let arr = Array {
-            item_desc: FieldDescriptor::new(item_desc.to_string()),
+            // prepend '[' to item's descriptor
+            desc: FieldDescriptor::new(format!("[{}", item_desc)),
             length,
             data,
         };

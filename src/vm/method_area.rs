@@ -53,6 +53,30 @@ impl MethodArea {
         }
     }
 
+    pub fn is_subclass_of(&self, cls_name: &str, target_cls_name: &str) -> bool {
+        let cls = self
+            .classes
+            .get(cls_name)
+            .expect("class must have been resolved");
+
+        if cls.name == target_cls_name {
+            return true;
+        }
+
+        // traverse superclasses
+        if cls
+            .super_class
+            .iter()
+            .any(|sc_name| self.is_subclass_of(sc_name, target_cls_name))
+        {
+            return true;
+        }
+        // traverse superinterfaces
+        cls.interfaces
+            .iter()
+            .any(|if_name| self.is_subclass_of(if_name, target_cls_name))
+    }
+
     pub fn collect_all_superclasses(
         &self,
         class_name: &str,

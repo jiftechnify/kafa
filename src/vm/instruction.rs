@@ -234,8 +234,8 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0xBD => instr_anewarray,
     0xBE => instr_arraylength,
     // 0xBF => instr_athrow,
-    // 0xC0 => instr_checkcast,
-    // 0xC1 => instr_instanceof,
+    0xC0 => instr_checkcast,
+    0xC1 => instr_instanceof,
     // 0xC2 => instr_monitorenter,
     // 0xC3 => instr_monitorexit,
 
@@ -1448,7 +1448,7 @@ fn instr_new(t: &mut Thread, meth_area: &mut MethodArea, heap: &mut Heap) -> Ins
         let frame = t.current_frame();
         let idx = frame.next_param_u16();
         let CPInfo::Class { name } = frame.get_cp_info(idx) else {
-            return Err("not class")?;
+            return Err("not a class")?;
         };
         name
     };
@@ -1538,5 +1538,67 @@ fn instr_arraylength(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Ins
     };
 
     frame.push_operand(Value::Int(arr.get_length() as i32));
+    Ok(())
+}
+
+fn instr_checkcast(
+    t: &mut Thread,
+    meth_area: &mut MethodArea,
+    heap: &mut Heap,
+) -> InstructionResult {
+    let target_cls_name = {
+        let frame = t.current_frame();
+        let idx = frame.next_param_u16();
+        let CPInfo::Class { name } = frame.get_cp_info(idx) else {
+            return Err("not class")?;
+        };
+        name.clone()
+    };
+
+    let frame = t.current_frame();
+    let v @ Value::Reference(r) = frame.pop_operand() else {
+        return Err("operand is not a reference value")?;
+    };
+    let Some(rv) = heap.get(r) else {
+        return Err("referent not found on heap")?;
+    };
+
+    if rv.is_instance_of(&target_cls_name, meth_area) {
+        frame.push_operand(v);
+        Ok(())
+    } else {
+        Err(format!("value is not able to cast to type '{target_cls_name}'").into())
+    }
+}
+
+fn instr_instanceof(
+    t: &mut Thread,
+    meth_area: &mut MethodArea,
+    heap: &mut Heap,
+) -> InstructionResult {
+    let target_cls_name = {
+        let frame = t.current_frame();
+        let idx = frame.next_param_u16();
+        let CPInfo::Class { name } = frame.get_cp_info(idx) else {
+            return Err("not class")?;
+        };
+        name.clone()
+    };
+
+    let frame = t.current_frame();
+    let Value::Reference(r) = frame.pop_operand() else {
+        return Err("operand is not a reference value")?;
+    };
+    let Some(rv) = heap.get(r) else {
+        return Err("referent not found on heap")?;
+    };
+
+    let res = if rv.is_instance_of(&target_cls_name, meth_area) {
+        1
+    } else {
+        0
+    };
+    frame.push_operand(Value::Int(res));
+
     Ok(())
 }
