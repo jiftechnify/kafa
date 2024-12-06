@@ -413,7 +413,9 @@ macro_rules! instr_aload {
                 return Err("referent is not an array")?;
             };
 
-            let Some(v) = arr.get(idx as usize) else {
+            // TODO: should check item descriptor?
+
+            let Some(v) = arr.get(idx as u32) else {
                 return Err("array index out of bound")?;
             };
             let v @ $vtype(_) = v else {
@@ -431,9 +433,9 @@ instr_aload!(instr_laload, Value::Long, "long");
 instr_aload!(instr_faload, Value::Float, "float");
 instr_aload!(instr_daload, Value::Double, "double");
 instr_aload!(instr_aaload, Value::Reference, "reference");
-instr_aload!(instr_baload, Value::Byte, "byte");
-instr_aload!(instr_caload, Value::Char, "char");
-instr_aload!(instr_saload, Value::Short, "short");
+instr_aload!(instr_baload, Value::Int, "int"); // Byte/Boolean -> Int
+instr_aload!(instr_caload, Value::Int, "int"); // Char -> Int
+instr_aload!(instr_saload, Value::Int, "int"); // Short -> Int
 
 // pop from the operand stack and store it to the specified local (by index)
 macro_rules! instr_store {
@@ -494,7 +496,8 @@ macro_rules! instr_astore {
                 return Err("referent is not an array")?;
             };
 
-            arr.put(idx as usize, v);
+            // TODO: should check item descriptor?
+            arr.put(idx as u32, v);
 
             Ok(())
         }
@@ -506,9 +509,9 @@ instr_astore!(instr_lastore, Value::Long, "long");
 instr_astore!(instr_fastore, Value::Float, "float");
 instr_astore!(instr_dastore, Value::Double, "double");
 instr_astore!(instr_aastore, Value::Reference, "reference");
-instr_astore!(instr_bastore, Value::Byte, "byte");
-instr_astore!(instr_castore, Value::Char, "char");
-instr_astore!(instr_sastore, Value::Short, "short");
+instr_astore!(instr_bastore, Value::Int, "int"); // Int -> Byte/Boolean
+instr_astore!(instr_castore, Value::Int, "int"); // Int -> Char
+instr_astore!(instr_sastore, Value::Int, "int"); // Int -> Short
 
 macro_rules! pop_operand_if_category_matches {
     ($frame:expr, $category:pat) => {{
@@ -1466,7 +1469,7 @@ fn instr_new(t: &mut Thread, meth_area: &mut MethodArea, heap: &mut Heap) -> Ins
 fn instr_newarray(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
     let frame = t.current_frame();
 
-    let Value::Int(length) = frame.pop_operand() else {
+    let Value::Int(len) = frame.pop_operand() else {
         return Err("invalid type for length of array")?;
     };
 
@@ -1484,7 +1487,7 @@ fn instr_newarray(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Instru
         _ => unreachable!(),
     };
 
-    let rv = heap.alloc_array(length as usize, item_desc);
+    let rv = heap.alloc_array(len as u32, item_desc);
     t.current_frame().push_operand(rv);
 
     Ok(())
@@ -1495,7 +1498,7 @@ fn instr_anewarray(
     meth_area: &mut MethodArea,
     heap: &mut Heap,
 ) -> InstructionResult {
-    let (length, cls_name) = {
+    let (len, cls_name) = {
         let frame = t.current_frame();
         let Value::Int(length) = frame.pop_operand() else {
             return Err("invalid type for length of array")?;
@@ -1508,8 +1511,9 @@ fn instr_anewarray(
         (length, name.clone())
     };
 
-    // resolve the "innermost" class of array element
-    let innermost_cls_name = cls_name.trim_start_matches('[');
+    // resolve the class of "innermost" array element
+    let innermost = cls_name.trim_start_matches('[');
+    let innermost_cls_name = &innermost[1..innermost.len() - 1]; // innermost = "L{cls_name};"
     _ = meth_area.resolve_class(innermost_cls_name);
 
     let is_array = cls_name.starts_with("[");
@@ -1519,7 +1523,7 @@ fn instr_anewarray(
         format!("L{cls_name};")
     };
 
-    let rv = heap.alloc_array(length as usize, &item_desc);
+    let rv = heap.alloc_array(len as u32, &item_desc);
     t.current_frame().push_operand(rv);
 
     Ok(())
@@ -1538,7 +1542,7 @@ fn instr_arraylength(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Ins
         return Err("referent is not an array")?;
     };
 
-    frame.push_operand(Value::Int(arr.get_length() as i32));
+    frame.push_operand(Value::Int(arr.len() as i32));
     Ok(())
 }
 
