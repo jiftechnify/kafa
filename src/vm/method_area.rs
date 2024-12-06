@@ -6,9 +6,10 @@ use std::{
 use crate::class_file::MethodAccessFlags;
 
 use super::{
-    class::{Class, FieldValue, Method, MethodSignature},
+    class::{Class, Method, MethodSignature},
     class_loader::ClassLoader,
     error::VMResult,
+    value::MutValue,
 };
 
 pub struct MethodArea {
@@ -98,11 +99,7 @@ impl MethodArea {
         Ok(sc_set.into_iter().collect())
     }
 
-    pub fn resolve_static_field(
-        &mut self,
-        class_name: &str,
-        name: &str,
-    ) -> VMResult<Rc<FieldValue>> {
+    pub fn resolve_static_field(&mut self, class_name: &str, name: &str) -> VMResult<Rc<MutValue>> {
         // the symbolic reference to C given by the field reference must first be resolved.
         let cls = self.resolve_class(class_name)?;
 
@@ -133,7 +130,7 @@ impl MethodArea {
         &mut self,
         class_name: &str,
         name: &str,
-    ) -> VMResult<Option<Rc<FieldValue>>> {
+    ) -> VMResult<Option<Rc<MutValue>>> {
         let cls = self.resolve_class(class_name)?;
         Ok(cls.lookup_static_field(name))
     }

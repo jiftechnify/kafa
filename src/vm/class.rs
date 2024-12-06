@@ -4,7 +4,9 @@ use crate::class_file::{
     CPInfo, ClassAccessFlags, ConstantPool, FieldInfo, MethodAccessFlags, MethodComponents,
 };
 
-use super::{error::VMResult, heap::Heap, method_area::MethodArea, thread::Thread, Value};
+use super::{
+    error::VMResult, heap::Heap, method_area::MethodArea, thread::Thread, value::MutValue,
+};
 
 pub struct Class {
     pub name: String,
@@ -15,7 +17,7 @@ pub struct Class {
     pub super_class: Option<String>,
     pub interfaces: Vec<String>,
 
-    static_fields: HashMap<String, Rc<FieldValue>>,
+    static_fields: HashMap<String, Rc<MutValue>>,
     static_methods: HashMap<MethodSignature, Rc<Method>>,
 
     inst_fields_info: Vec<FieldInfo>,
@@ -34,8 +36,8 @@ impl Class {
             if f.access_flags.is_static() {
                 let fv = match f.get_const_val() {
                     // TODO: strictly speaking, this should be done within "initialization" process described in JVM spec 5.5.
-                    Some(cp_info) => FieldValue::from_cp_info(cp_info),
-                    None => FieldValue::default_val_of_type(&f.descriptor),
+                    Some(cp_info) => MutValue::from_cp_info(cp_info),
+                    None => MutValue::default_of_type(&f.descriptor),
                 };
                 let fv = Rc::new(fv);
                 static_fields.insert(f.name, fv);
@@ -189,7 +191,7 @@ impl Class {
 }
 
 impl Class {
-    pub fn lookup_static_field(&self, name: &str) -> Option<Rc<FieldValue>> {
+    pub fn lookup_static_field(&self, name: &str) -> Option<Rc<MutValue>> {
         self.static_fields.get(name).cloned()
     }
 
@@ -241,68 +243,6 @@ impl FieldDescriptor {
 impl std::fmt::Display for FieldDescriptor {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0)
-    }
-}
-
-#[derive(Clone)]
-pub struct FieldValue(Cell<Value>);
-
-impl FieldValue {
-    fn from_val(val: Value) -> Self {
-        FieldValue(Cell::new(val))
-    }
-
-    fn from_cp_info(cp_info: &CPInfo) -> Self {
-        use CPInfo::*;
-        let val = match cp_info {
-            Integer(i) => Value::Int(*i),
-            Float(f) => Value::Float(*f),
-            Long(l) => Value::Long(*l),
-            Double(d) => Value::Double(*d),
-            String { .. } => {
-                eprintln!("string constant is not supported");
-                Value::Reference(0) // null
-            }
-            _ => {
-                eprintln!("not a constant value");
-                Value::Reference(0) // null
-            }
-        };
-        FieldValue::from_val(val)
-    }
-
-    pub fn default_val_of_type(desc: &str) -> Self {
-        assert!(!desc.is_empty());
-        let Some(fst_char) = desc.chars().nth(0) else {
-            unreachable!()
-        };
-        let default_val = match fst_char {
-            'B' => Value::Byte(0),
-            'C' => Value::Char(0),
-            'D' => Value::Double(0.0),
-            'F' => Value::Float(0.0),
-            'I' => Value::Int(0),
-            'J' => Value::Long(0),
-            'L' => Value::Reference(0), // null
-            'S' => Value::Short(0),
-            // 'Z' -> boolean
-            // the Java programming language that operate on boolean values
-            // are compiled to use values of the Java Virtual Machine int data type.
-            'Z' => Value::Int(0),
-            '[' => Value::Reference(0), // null reference to arrays
-            _ => unreachable!(),
-        };
-        FieldValue::from_val(default_val)
-    }
-}
-
-impl FieldValue {
-    pub fn get(&self) -> Value {
-        self.0.get()
-    }
-
-    pub fn put(&self, new_val: Value) {
-        self.0.set(new_val);
     }
 }
 

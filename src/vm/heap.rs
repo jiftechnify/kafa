@@ -1,9 +1,9 @@
 use std::{collections::HashMap, rc::Rc};
 
 use super::{
-    class::{Class, FieldDescriptor, FieldValue},
+    class::{Class, FieldDescriptor},
     method_area::MethodArea,
-    Value,
+    value::{MutValue, Value},
 };
 
 pub struct Heap(Vec<RefValue>);
@@ -101,7 +101,7 @@ impl InstanceFieldIdent {
 
 pub struct Object {
     class: Rc<Class>,
-    fields: HashMap<InstanceFieldIdent, FieldValue>,
+    fields: HashMap<InstanceFieldIdent, MutValue>,
 }
 
 impl Object {
@@ -118,7 +118,7 @@ impl Object {
         classes.into_iter().for_each(|cls| {
             for f in cls.instance_fields() {
                 let id = InstanceFieldIdent::new(&cls.name, &f.name);
-                let fv = FieldValue::default_val_of_type(&f.descriptor);
+                let fv = MutValue::default_of_type(&f.descriptor);
                 fields.insert(id, fv);
             }
         });
@@ -134,7 +134,7 @@ impl Object {
         self.class.clone()
     }
 
-    pub fn get_field(&self, cls_name: &str, fld_name: &str) -> Option<&FieldValue> {
+    pub fn get_field(&self, cls_name: &str, fld_name: &str) -> Option<&MutValue> {
         let id = InstanceFieldIdent::new(cls_name, fld_name);
         self.fields.get(&id)
     }
@@ -143,16 +143,16 @@ impl Object {
 pub struct Array {
     desc: FieldDescriptor,
     length: usize,
-    data: Box<[FieldValue]>,
+    data: Box<[MutValue]>,
 }
 
 impl Array {
     #[allow(clippy::new_ret_no_self)]
     fn new(length: usize, item_desc: &str) -> RefValue {
         let mut data = Vec::with_capacity(length);
-        let v = FieldValue::default_val_of_type(item_desc);
+        let v = MutValue::default_of_type(item_desc);
         data.resize(length, v);
-        let data = data.into(); // Vec<FieldValue> -> Box<[FieldValue]]>
+        let data = data.into(); // Vec<MutValue> -> Box<[MutValue]]>
 
         let arr = Array {
             // prepend '[' to item's descriptor
