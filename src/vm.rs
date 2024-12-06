@@ -59,7 +59,7 @@ impl VM {
         }
         self.thread.push_frame(bs_frame);
 
-        let sig = MethodSignature::new(method_name, method_desc);
+        let sig = MethodSignature::new_with_raw_descriptor(method_name, method_desc);
         self.thread
             .exec_bootstrap_method(&mut meth_area, &mut heap, class_name, &sig)?;
 

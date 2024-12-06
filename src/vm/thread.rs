@@ -72,7 +72,7 @@ impl Thread {
         heap: &mut Heap,
         cls: Rc<Class>,
     ) -> VMResult<()> {
-        let sig_clinit = &MethodSignature::new("<clinit>", "()V");
+        let sig_clinit = &MethodSignature::new_with_raw_descriptor("<clinit>", "()V");
         let Some(clinit) = cls.lookup_static_method(sig_clinit) else {
             return Ok(());
         };

@@ -26,7 +26,7 @@ pub struct Class {
 
 impl Class {
     pub fn from_class_file(cls_file: crate::class_file::ClassFile) -> VMResult<Class> {
-        let rtcp = RunTimeConstantPool::from_class_file_cp(cls_file.constant_pool);
+        let rtcp = RunTimeConstantPool::from_class_file_cp(cls_file.constant_pool)?;
 
         let mut static_fields = HashMap::new();
         let mut inst_fields_info = Vec::new();
@@ -225,7 +225,7 @@ impl Hash for Class {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct FieldDescriptor(String);
 
 impl FieldDescriptor {
@@ -306,10 +306,14 @@ impl FieldValue {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, Default)]
 pub struct MethodDescriptor(String);
 
 impl MethodDescriptor {
+    fn new(raw: String) -> Self {
+        Self(raw)
+    }
+
     fn num_args(&self) -> usize {
         assert!(!self.0.is_empty());
 
@@ -386,10 +390,17 @@ pub struct MethodSignature {
 }
 
 impl MethodSignature {
-    pub fn new(name: &str, desc: &str) -> MethodSignature {
+    pub fn new(name: &str, desc: MethodDescriptor) -> MethodSignature {
         MethodSignature {
             name: name.to_string(),
-            descriptor: MethodDescriptor(desc.to_string()),
+            descriptor: desc,
+        }
+    }
+
+    pub fn new_with_raw_descriptor(name: &str, desc: &str) -> MethodSignature {
+        MethodSignature {
+            name: name.to_string(),
+            descriptor: MethodDescriptor::new(desc.to_string()),
         }
     }
 }
@@ -446,17 +457,17 @@ pub enum RunTimeCPInfo {
     Fieldref {
         class_name: String,
         name: String,
-        descriptor: String,
+        descriptor: FieldDescriptor,
     },
     Methodref {
         class_name: String,
         name: String,
-        descriptor: String,
+        descriptor: MethodDescriptor,
     },
     InterfaceMethodref {
         iface_name: String,
         name: String,
-        descriptor: String,
+        descriptor: MethodDescriptor,
     },
     NameAndType {
         name: String,
@@ -466,21 +477,23 @@ pub enum RunTimeCPInfo {
 }
 
 impl RunTimeConstantPool {
-    pub fn from_class_file_cp(cp: crate::class_file::ConstantPool) -> RunTimeConstantPool {
+    pub fn from_class_file_cp(
+        cp: crate::class_file::ConstantPool,
+    ) -> VMResult<RunTimeConstantPool> {
         use RunTimeCPInfo::*;
 
         let resolved = cp
             .infos()
             .map(|cp_info| match cp_info {
-                CPInfo::Utf8(s) => Utf8(s.clone()),
-                CPInfo::Integer(i) => Integer(*i),
-                CPInfo::Float(f) => Float(*f),
-                CPInfo::Long(l) => Long(*l),
-                CPInfo::Double(d) => Double(*d),
-                CPInfo::Class { name_idx } => Class {
+                CPInfo::Utf8(s) => Ok(Utf8(s.clone())),
+                CPInfo::Integer(i) => Ok(Integer(*i)),
+                CPInfo::Float(f) => Ok(Float(*f)),
+                CPInfo::Long(l) => Ok(Long(*l)),
+                CPInfo::Double(d) => Ok(Double(*d)),
+                CPInfo::Class { name_idx } => Ok(Class {
                     name: cp.get_utf8(*name_idx).to_string(),
-                },
-                CPInfo::String { string_idx } => String(cp.get_utf8(*string_idx).to_string()),
+                }),
+                CPInfo::String { string_idx } => Ok(String(cp.get_utf8(*string_idx).to_string())),
                 CPInfo::Fieldref {
                     class_idx,
                     name_and_type_idx,
@@ -496,14 +509,15 @@ impl RunTimeConstantPool {
                 CPInfo::NameAndType {
                     name_idx,
                     descriptor_idx,
-                } => NameAndType {
+                } => Ok(NameAndType {
                     name: cp.get_utf8(*name_idx).to_string(),
                     descriptor: cp.get_utf8(*descriptor_idx).to_string(),
-                },
-                CPInfo::Unsupported => Unsupported,
+                }),
+                CPInfo::Unsupported => Ok(Unsupported),
             })
-            .collect::<Vec<_>>();
-        RunTimeConstantPool(resolved)
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(RunTimeConstantPool(resolved))
     }
 
     pub fn empty() -> RunTimeConstantPool {
@@ -516,64 +530,52 @@ impl RunTimeConstantPool {
     }
 }
 
-fn resolve_fieldref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPInfo {
-    let Some(ConstPoolRef {
+fn resolve_fieldref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> VMResult<RunTimeCPInfo> {
+    let ConstPoolRef {
         class_name,
         name,
         descriptor,
-    }) = resolve_const_pool_ref(cp, cls_idx, nt_idx)
-    else {
-        return RunTimeCPInfo::Methodref {
-            class_name: String::new(),
-            name: String::new(),
-            descriptor: String::new(),
-        };
+    } = resolve_const_pool_ref(cp, cls_idx, nt_idx)?;
+
+    let fld = RunTimeCPInfo::Fieldref {
+        class_name,
+        name,
+        descriptor: FieldDescriptor(descriptor),
     };
-    RunTimeCPInfo::Fieldref {
-        class_name,
-        name,
-        descriptor,
-    }
+    Ok(fld)
 }
 
-fn resolve_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPInfo {
-    let Some(ConstPoolRef {
+fn resolve_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> VMResult<RunTimeCPInfo> {
+    let ConstPoolRef {
         class_name,
         name,
         descriptor,
-    }) = resolve_const_pool_ref(cp, cls_idx, nt_idx)
-    else {
-        return RunTimeCPInfo::Methodref {
-            class_name: String::new(),
-            name: String::new(),
-            descriptor: String::new(),
-        };
+    } = resolve_const_pool_ref(cp, cls_idx, nt_idx)?;
+
+    let meth = RunTimeCPInfo::Methodref {
+        class_name,
+        name,
+        descriptor: MethodDescriptor(descriptor),
     };
-    RunTimeCPInfo::Methodref {
-        class_name,
-        name,
-        descriptor,
-    }
+    Ok(meth)
 }
 
-fn resolve_interface_methodref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> RunTimeCPInfo {
-    let Some(ConstPoolRef {
+fn resolve_interface_methodref(
+    cp: &ConstantPool,
+    cls_idx: u16,
+    nt_idx: u16,
+) -> VMResult<RunTimeCPInfo> {
+    let ConstPoolRef {
         class_name: iface_name,
         name,
         descriptor,
-    }) = resolve_const_pool_ref(cp, cls_idx, nt_idx)
-    else {
-        return RunTimeCPInfo::InterfaceMethodref {
-            iface_name: String::new(),
-            name: String::new(),
-            descriptor: String::new(),
-        };
-    };
-    RunTimeCPInfo::InterfaceMethodref {
+    } = resolve_const_pool_ref(cp, cls_idx, nt_idx)?;
+    let meth = RunTimeCPInfo::InterfaceMethodref {
         iface_name,
         name,
-        descriptor,
-    }
+        descriptor: MethodDescriptor(descriptor),
+    };
+    Ok(meth)
 }
 
 struct ConstPoolRef {
@@ -581,10 +583,9 @@ struct ConstPoolRef {
     name: String,
     descriptor: String,
 }
-fn resolve_const_pool_ref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> Option<ConstPoolRef> {
+fn resolve_const_pool_ref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> VMResult<ConstPoolRef> {
     let &CPInfo::Class { name_idx } = cp.get_info(cls_idx) else {
-        eprintln!("failed to resolve methodref");
-        return None;
+        return Err("failed to resolve CPInfo::Class".into());
     };
     let class_name = cp.get_utf8(name_idx).to_string();
 
@@ -593,13 +594,12 @@ fn resolve_const_pool_ref(cp: &ConstantPool, cls_idx: u16, nt_idx: u16) -> Optio
         descriptor_idx,
     } = cp.get_info(nt_idx)
     else {
-        eprintln!("failed to resolve methodref");
-        return None;
+        return Err("failed to resolve CPInfo::NameAndType".into());
     };
     let name = cp.get_utf8(name_idx).to_string();
     let descriptor = cp.get_utf8(descriptor_idx).to_string();
 
-    Some(ConstPoolRef {
+    Ok(ConstPoolRef {
         class_name,
         name,
         descriptor,

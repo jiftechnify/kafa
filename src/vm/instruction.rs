@@ -1278,7 +1278,7 @@ fn instr_invokevirtual(
         (class_name.clone(), name.clone(), descriptor.clone())
     };
     // resolve method referenced by method ref
-    let sig = MethodSignature::new(&meth_name, &desc);
+    let sig = MethodSignature::new(&meth_name, desc);
     let resolved_meth = meth_area.resolve_instance_method(&ref_cls_name, &sig)?;
 
     // get receiver object
@@ -1337,7 +1337,7 @@ fn instr_invokespecial(
 
     // lookup method to be called
     let cls = meth_area.resolve_class(&cls_name)?;
-    let sig = MethodSignature::new(&meth_name, &desc);
+    let sig = MethodSignature::new(&meth_name, desc);
     let meth = cls
         .lookup_instance_method(&sig)
         .ok_or("instance method {cls.name}.{sig} not found")?;
@@ -1378,7 +1378,7 @@ fn instr_invokestatic(
     cls.initialize(t, meth_area, heap)?;
 
     // lookup method to be called
-    let sig = MethodSignature::new(&meth_name, &desc);
+    let sig = MethodSignature::new(&meth_name, desc);
     let (cls, meth) = meth_area.resolve_static_method(&cls_name, &sig)?;
     let num_args = meth.num_args();
 
@@ -1411,7 +1411,7 @@ fn instr_invokeinterface(
         (iface_name.clone(), name.clone(), descriptor.clone())
     };
     // resolve method referenced by method ref
-    let sig = MethodSignature::new(&meth_name, &desc);
+    let sig = MethodSignature::new(&meth_name, desc);
     let resolved_meth = meth_area.resolve_instance_method(&ref_cls_name, &sig)?;
 
     // skip 2-bytes of code: count operand and the next byte (always 0)
