@@ -42,7 +42,7 @@ impl Heap {
 
 pub enum RefValue {
     Object(Object),
-    Array(Array), // TODO: consider specialized implementation for array of boolean
+    Array(Array), // TODO: consider specialized implementation for array of primitive types
     Null,
 }
 

@@ -4,7 +4,7 @@ use crate::class_file::{
     CPInfo, ClassAccessFlags, ConstantPool, FieldInfo, MethodAccessFlags, MethodComponents,
 };
 
-use super::{heap::Heap, method_area::MethodArea, thread::Thread, Value};
+use super::{error::VMResult, heap::Heap, method_area::MethodArea, thread::Thread, Value};
 
 pub struct Class {
     pub name: String,
@@ -126,7 +126,7 @@ impl Class {
         thread: &mut Thread,
         meth_area: &mut MethodArea,
         heap: &mut Heap,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> VMResult<()> {
         use ClassInitState::*;
 
         let BeforeInit = self.init_state.get() else {
@@ -156,7 +156,7 @@ impl Class {
     fn superclasses_to_be_initialized(
         &self,
         meth_area: &mut MethodArea,
-    ) -> Result<Vec<Rc<Class>>, Box<dyn std::error::Error>> {
+    ) -> VMResult<Vec<Rc<Class>>> {
         let mut res = Vec::new();
         if let Some(ref sc_name) = self.super_class {
             let sc = meth_area.resolve_class(sc_name)?;

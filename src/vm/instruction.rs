@@ -1,13 +1,14 @@
 use crate::vm::heap::RefValue;
 
 use super::class::{MethodSignature, RunTimeCPInfo as CPInfo};
+use super::error::VMResult;
 use super::frame::Frame;
 use super::heap::Heap;
 use super::method_area::MethodArea;
 use super::thread::Thread;
 use super::value::{Value, ValueCategory};
 
-type InstructionResult = Result<(), Box<dyn std::error::Error>>;
+type InstructionResult = VMResult<()>;
 type Instruction = fn(&mut Thread, &mut MethodArea, &mut Heap) -> InstructionResult;
 
 pub fn exec_instr(

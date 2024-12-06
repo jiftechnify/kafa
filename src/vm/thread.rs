@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use super::{
     class::{Class, MethodSignature},
+    error::VMResult,
     frame::Frame,
     heap::Heap,
     instruction::exec_instr,
@@ -37,7 +38,7 @@ impl Thread {
         heap: &mut Heap,
         class_name: &str,
         sig: &MethodSignature,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> VMResult<()> {
         let caller = self.current_frame();
 
         // lookup method to be called
@@ -70,7 +71,7 @@ impl Thread {
         meth_area: &mut MethodArea,
         heap: &mut Heap,
         cls: Rc<Class>,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    ) -> VMResult<()> {
         let sig_clinit = &MethodSignature::new("<clinit>", "()V");
         let Some(clinit) = cls.lookup_static_method(sig_clinit) else {
             return Ok(());

@@ -5,9 +5,8 @@ mod support;
 mod vm;
 
 use std::env;
-use std::error::Error;
 
-use vm::{Value, VM};
+use vm::{VMResult, Value, VM};
 
 const ENV_KEY_CLASSPATH: &str = "KAFA_CLASSPATH";
 
@@ -35,7 +34,7 @@ fn main() {
     print_result(vm.execute("loader/RuntimeClassLoadingSample", "start", "()I", &[]));
 }
 
-fn print_result(res: Result<Value, Box<dyn Error>>) {
+fn print_result(res: VMResult<Value>) {
     match res {
         Ok(v) => {
             println!("return value: {v:?}");

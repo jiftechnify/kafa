@@ -1,5 +1,6 @@
 mod class;
 mod class_loader;
+mod error;
 mod frame;
 mod heap;
 mod instruction;
@@ -11,6 +12,7 @@ use std::ffi::{OsStr, OsString};
 
 use class::MethodSignature;
 pub use class_loader::ClassLoader;
+pub use error::VMResult;
 use frame::Frame;
 use heap::Heap;
 use method_area::MethodArea;
@@ -39,7 +41,7 @@ impl VM {
         method_name: &str,
         method_desc: &str,
         args: &[Value],
-    ) -> Result<Value, Box<dyn std::error::Error>> {
+    ) -> VMResult<Value> {
         println!("executing {class_name}.{method_name}:{method_desc} with args: {args:?}");
 
         let cls_loader = ClassLoader::new(&self.classpath);

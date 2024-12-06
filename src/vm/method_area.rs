@@ -8,6 +8,7 @@ use crate::class_file::MethodAccessFlags;
 use super::{
     class::{Class, FieldValue, Method, MethodSignature},
     class_loader::ClassLoader,
+    error::VMResult,
 };
 
 pub struct MethodArea {
@@ -25,10 +26,7 @@ impl MethodArea {
 }
 
 impl MethodArea {
-    pub fn resolve_class(
-        &mut self,
-        class_name: &str,
-    ) -> Result<Rc<Class>, Box<dyn std::error::Error>> {
+    pub fn resolve_class(&mut self, class_name: &str) -> VMResult<Rc<Class>> {
         match self.classes.get(class_name) {
             Some(cls) => Ok(cls.clone()),
             None => {
@@ -77,10 +75,7 @@ impl MethodArea {
             .any(|if_name| self.is_subclass_of(if_name, target_cls_name))
     }
 
-    pub fn collect_all_superclasses(
-        &self,
-        class_name: &str,
-    ) -> Result<Vec<Rc<Class>>, Box<dyn std::error::Error>> {
+    pub fn collect_all_superclasses(&self, class_name: &str) -> VMResult<Vec<Rc<Class>>> {
         let Some(c) = self.classes.get(class_name) else {
             return Err("class '{class_name}' have not been resolved")?;
         };
@@ -107,7 +102,7 @@ impl MethodArea {
         &mut self,
         class_name: &str,
         name: &str,
-    ) -> Result<Rc<FieldValue>, Box<dyn std::error::Error>> {
+    ) -> VMResult<Rc<FieldValue>> {
         // the symbolic reference to C given by the field reference must first be resolved.
         let cls = self.resolve_class(class_name)?;
 
@@ -138,7 +133,7 @@ impl MethodArea {
         &mut self,
         class_name: &str,
         name: &str,
-    ) -> Result<Option<Rc<FieldValue>>, Box<dyn std::error::Error>> {
+    ) -> VMResult<Option<Rc<FieldValue>>> {
         let cls = self.resolve_class(class_name)?;
         Ok(cls.lookup_static_field(name))
     }
@@ -147,7 +142,7 @@ impl MethodArea {
         &mut self,
         class_name: &str,
         sig: &MethodSignature,
-    ) -> Result<(Rc<Class>, Rc<Method>), Box<dyn std::error::Error>> {
+    ) -> VMResult<(Rc<Class>, Rc<Method>)> {
         // the symbolic reference to C given by the method reference is first resolved.
         let cls = self.resolve_class(class_name)?;
 
@@ -183,7 +178,7 @@ impl MethodArea {
         &mut self,
         class_name: &str,
         sig: &MethodSignature,
-    ) -> Result<Rc<Method>, Box<dyn std::error::Error>> {
+    ) -> VMResult<Rc<Method>> {
         // the symbolic reference to C given by the method reference is first resolved.
         let cls = self.resolve_class(class_name)?;
 
@@ -201,7 +196,7 @@ impl MethodArea {
         &mut self,
         cls_name: &str,
         sig: &MethodSignature,
-    ) -> Result<Rc<Method>, Box<dyn std::error::Error>> {
+    ) -> VMResult<Rc<Method>> {
         let cls = self.classes.get(cls_name).expect("").clone();
         assert!(!cls.access_flags.is_interface());
 
@@ -222,7 +217,7 @@ impl MethodArea {
         &mut self,
         iface_name: &str,
         sig: &MethodSignature,
-    ) -> Result<Rc<Method>, Box<dyn std::error::Error>> {
+    ) -> VMResult<Rc<Method>> {
         let iface = self.classes.get(iface_name).expect("").clone();
         assert!(iface.access_flags.is_interface());
         if let Some(m) = iface.lookup_instance_method(sig) {
@@ -243,7 +238,7 @@ impl MethodArea {
         &mut self,
         runtime_class: &Class,
         resolved_meth: Rc<Method>,
-    ) -> Result<Rc<Method>, Box<dyn std::error::Error>> {
+    ) -> VMResult<Rc<Method>> {
         // 1. If mR is marked ACC_PRIVATE, then it is the selected method.
         if resolved_meth
             .access_flags
@@ -285,7 +280,7 @@ impl MethodArea {
         &self,
         base: &Class,
         sig: &MethodSignature,
-    ) -> Result<Rc<Method>, Box<dyn std::error::Error>> {
+    ) -> VMResult<Rc<Method>> {
         let mut seen_ifaces = HashSet::new();
         let mut ifaces = base
             .interfaces

@@ -10,7 +10,7 @@ use zip::{result::ZipError, ZipArchive};
 
 use crate::class_file::ClassFile;
 
-use super::class::Class;
+use super::{class::Class, error::VMResult};
 
 pub struct ClassLoader {
     classpath: Vec<PathBuf>,
@@ -28,7 +28,7 @@ impl ClassLoader {
 }
 
 impl ClassLoader {
-    pub fn load(&self, name: &str) -> Result<Class, Box<dyn std::error::Error>> {
+    pub fn load(&self, name: &str) -> VMResult<Class> {
         for cp in self.classpath.iter() {
             match cp.extension() {
                 Some(ext) if (ext == "jar" || ext == "zip") => match self.load_from_jar(cp, name) {
@@ -59,11 +59,7 @@ impl ClassLoader {
         return Err("class '{name}' not found in classpath")?;
     }
 
-    fn load_from_class(
-        &self,
-        cp: &Path,
-        cls_name: &str,
-    ) -> Result<Option<Class>, Box<dyn std::error::Error>> {
+    fn load_from_class(&self, cp: &Path, cls_name: &str) -> VMResult<Option<Class>> {
         let cls_file_path = cp.join(format!("{}.class", cls_name));
 
         match File::open(cls_file_path) {
@@ -81,11 +77,7 @@ impl ClassLoader {
         }
     }
 
-    fn load_from_jar(
-        &self,
-        jar_path: &Path,
-        cls_name: &str,
-    ) -> Result<Option<Class>, Box<dyn std::error::Error>> {
+    fn load_from_jar(&self, jar_path: &Path, cls_name: &str) -> VMResult<Option<Class>> {
         let jar = File::open(jar_path)?;
         let mut archive = ZipArchive::new(jar)?;
 
