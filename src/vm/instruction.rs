@@ -220,7 +220,6 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0xB0 => instr_areturn,
     0xB1 => instr_return,
 
-    // TODO: implement instructions for reference type values
     0xB2 => instr_getstatic,
     0xB3 => instr_putstatic,
     0xB4 => instr_getfield,
@@ -228,7 +227,7 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     0xB6 => instr_invokevirtual,
     0xB7 => instr_invokespecial,
     0xB8 => instr_invokestatic,
-    // 0xB9 => instr_invokeinterface,
+    0xB9 => instr_invokeinterface,
     // 0xBA => instr_invokedynamic,
     0xBB => instr_new,
     0xBC => instr_newarray,
@@ -237,6 +236,10 @@ const INSTRUCTION_TABLE: [Option<Instruction>; 256] = instruction_table! {
     // 0xBF => instr_athrow,
     // 0xC0 => instr_checkcast,
     // 0xC1 => instr_instanceof,
+    // 0xC2 => instr_monitorenter,
+    // 0xC3 => instr_monitorexit,
+
+    // TODO: implement extended instructions
 };
 
 // no-op
@@ -1383,6 +1386,58 @@ fn instr_invokestatic(
     let caller_frame = t.current_frame();
     let mut callee_frame = Frame::new(cls, meth);
     Frame::transfer_args(caller_frame, &mut callee_frame, num_args);
+    t.push_frame(callee_frame);
+
+    Ok(())
+}
+
+fn instr_invokeinterface(
+    t: &mut Thread,
+    meth_area: &mut MethodArea,
+    heap: &mut Heap,
+) -> InstructionResult {
+    let (ref_cls_name, meth_name, desc) = {
+        let frame = t.current_frame();
+        let idx = frame.next_param_u16();
+        let CPInfo::InterfaceMethodref {
+            iface_name,
+            name,
+            descriptor,
+        } = frame.get_cp_info(idx)
+        else {
+            return Err("invalid interfaceMethodref")?;
+        };
+        (iface_name.clone(), name.clone(), descriptor.clone())
+    };
+    // resolve method referenced by method ref
+    let sig = MethodSignature::new(&meth_name, &desc);
+    let resolved_meth = meth_area.resolve_instance_method(&ref_cls_name, &sig)?;
+
+    // skip 2-bytes of code: count operand and the next byte (always 0)
+    let frame = t.current_frame();
+    frame.next_param_u16();
+
+    // get receiver object
+    let this @ Value::Reference(r) = frame.pop_operand() else {
+        return Err("operand is not a reference value")?;
+    };
+    let Some(rv) = heap.get(r) else {
+        return Err("referent not found on heap")?;
+    };
+    let RefValue::Object(obj) = rv else {
+        return Err("referent is not a object")?;
+    };
+
+    // select method to be called
+    let rt_cls = obj.get_class();
+    let meth = meth_area.select_instance_method(&rt_cls, resolved_meth)?;
+    let num_args = meth.num_args();
+
+    // method call
+    // create new frame for the method, transfer the receiver(`this`) and args to the frame, then push onto frame stack
+    let caller_frame = t.current_frame();
+    let mut callee_frame = Frame::new(rt_cls, meth);
+    Frame::transfer_receiver_and_args(caller_frame, &mut callee_frame, this, num_args);
     t.push_frame(callee_frame);
 
     Ok(())
