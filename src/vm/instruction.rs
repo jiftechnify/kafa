@@ -1191,15 +1191,18 @@ fn instr_putstatic(
     Ok(())
 }
 
-// get a value of a class instance field
+// get a value of an instance field
 fn instr_getfield(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
-    let fld_name = {
+    let (cls_name, fld_name) = {
         let frame = t.current_frame();
         let idx = frame.next_param_u16();
-        let CPInfo::Fieldref { name, .. } = frame.get_cp_info(idx) else {
+        let CPInfo::Fieldref {
+            class_name, name, ..
+        } = frame.get_cp_info(idx)
+        else {
             return Err("invalid fieldref")?;
         };
-        name.clone()
+        (class_name.clone(), name.clone())
     };
 
     let frame = t.current_frame();
@@ -1212,23 +1215,26 @@ fn instr_getfield(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Instru
     let RefValue::Object(obj) = rv else {
         return Err("referent is not a object")?;
     };
-    let Some(field) = obj.get_field(&fld_name) else {
-        return Err(format!("field {fld_name} not found"))?;
+    let Some(field) = obj.get_field(&cls_name, &fld_name) else {
+        return Err(format!("field {cls_name}.{fld_name} not found"))?;
     };
 
     frame.push_operand(field.get());
     Ok(())
 }
 
-// put a value to a class instance field
+// put a value to an instance field
 fn instr_putfield(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> InstructionResult {
-    let fld_name = {
+    let (cls_name, fld_name) = {
         let frame = t.current_frame();
         let idx = frame.next_param_u16();
-        let CPInfo::Fieldref { name, .. } = frame.get_cp_info(idx) else {
+        let CPInfo::Fieldref {
+            class_name, name, ..
+        } = frame.get_cp_info(idx)
+        else {
             return Err("invalid fieldref")?;
         };
-        name.clone()
+        (class_name.clone(), name.clone())
     };
 
     let frame = t.current_frame();
@@ -1241,8 +1247,8 @@ fn instr_putfield(t: &mut Thread, _: &mut MethodArea, heap: &mut Heap) -> Instru
     let RefValue::Object(obj) = rv else {
         return Err("referent is not a object")?;
     };
-    let Some(field) = obj.get_field(&fld_name) else {
-        return Err(format!("field {fld_name} not found"))?;
+    let Some(field) = obj.get_field(&cls_name, &fld_name) else {
+        return Err(format!("field {cls_name}.{fld_name} not found"))?;
     };
 
     field.put(frame.pop_operand());
@@ -1395,7 +1401,7 @@ fn instr_new(t: &mut Thread, meth_area: &mut MethodArea, heap: &mut Heap) -> Ins
     let cls = meth_area.resolve_class(cls_name)?;
     cls.clone().initialize(t, meth_area, heap)?;
 
-    let rv = heap.alloc_object(cls.clone());
+    let rv = heap.alloc_object(cls.clone(), meth_area);
     t.current_frame().push_operand(rv);
 
     Ok(())

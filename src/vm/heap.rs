@@ -2,6 +2,7 @@ use std::{collections::HashMap, rc::Rc};
 
 use super::{
     class::{Class, FieldDescriptor, FieldValue},
+    method_area::MethodArea,
     Value,
 };
 
@@ -15,8 +16,8 @@ impl Heap {
 }
 
 impl Heap {
-    pub fn alloc_object(&mut self, class: Rc<Class>) -> Value {
-        let obj = Object::new(class);
+    pub fn alloc_object(&mut self, class: Rc<Class>, meth_area: &mut MethodArea) -> Value {
+        let obj = Object::new(class, meth_area);
         self.alloc_ref_val(obj)
     }
 
@@ -45,21 +46,49 @@ pub enum RefValue {
     Null,
 }
 
+#[derive(Clone, PartialEq, Eq, Hash)]
+pub struct InstanceFieldIdent {
+    class_name: String,
+    name: String,
+}
+
+impl InstanceFieldIdent {
+    pub fn new(cls_name: &str, name: &str) -> InstanceFieldIdent {
+        Self {
+            class_name: cls_name.to_string(),
+            name: name.to_string(),
+        }
+    }
+}
+
 pub struct Object {
     class: Rc<Class>,
-    fields: HashMap<String, FieldValue>,
+    fields: HashMap<InstanceFieldIdent, FieldValue>,
 }
 
 impl Object {
     #[allow(clippy::new_ret_no_self)]
-    fn new(class: Rc<Class>) -> RefValue {
+    fn new(base_cls: Rc<Class>, meth_area: &mut MethodArea) -> RefValue {
         let mut fields = HashMap::new();
-        for f in class.instance_fields() {
-            let fv = FieldValue::default_val_of_type(&f.descriptor);
-            fields.insert(f.name.clone(), fv);
-        }
 
-        let obj = Object { class, fields };
+        let mut classes = meth_area
+            .lookup_all_superclasses(&base_cls.name)
+            .inspect_err(|err| eprintln!("{}", err))
+            .unwrap();
+        classes.push(base_cls.clone());
+
+        classes.into_iter().for_each(|cls| {
+            for f in cls.instance_fields() {
+                let id = InstanceFieldIdent::new(&cls.name, &f.name);
+                let fv = FieldValue::default_val_of_type(&f.descriptor);
+                fields.insert(id, fv);
+            }
+        });
+
+        let obj = Object {
+            class: base_cls,
+            fields,
+        };
         RefValue::Object(obj)
     }
 
@@ -67,8 +96,9 @@ impl Object {
         self.class.clone()
     }
 
-    pub fn get_field(&self, name: &str) -> Option<&FieldValue> {
-        self.fields.get(name)
+    pub fn get_field(&self, cls_name: &str, fld_name: &str) -> Option<&FieldValue> {
+        let id = InstanceFieldIdent::new(cls_name, fld_name);
+        self.fields.get(&id)
     }
 }
 

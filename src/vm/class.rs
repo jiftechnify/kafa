@@ -1,4 +1,4 @@
-use std::{cell::Cell, collections::HashMap, rc::Rc};
+use std::{cell::Cell, collections::HashMap, hash::Hash, rc::Rc};
 
 use crate::class_file::{
     CPInfo, ClassAccessFlags, ConstantPool, FieldInfo, MethodAccessFlags, MethodComponents,
@@ -197,6 +197,21 @@ impl Class {
 
     pub fn get_cp_info(&self, idx: u16) -> &RunTimeCPInfo {
         self.const_pool.get_info(idx)
+    }
+}
+
+// Class is uniquely identified by its name (really?)
+impl PartialEq for Class {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for Class {}
+
+impl Hash for Class {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
     }
 }
 

@@ -1,4 +1,7 @@
-use std::{collections::HashMap, rc::Rc};
+use std::{
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use super::{
     class::{Class, FieldValue, Method, MethodSignature},
@@ -46,6 +49,32 @@ impl MethodArea {
                 Ok(cls)
             }
         }
+    }
+
+    pub fn lookup_all_superclasses(
+        &self,
+        class_name: &str,
+    ) -> Result<Vec<Rc<Class>>, Box<dyn std::error::Error>> {
+        let Some(c) = self.classes.get(class_name) else {
+            return Err("class '{class_name}' have not been resolved")?;
+        };
+
+        // ignoring warning, since sc_set is just temporal for deduplication
+        #[allow(clippy::mutable_key_type)]
+        let mut sc_set = HashSet::new();
+        if let Some(sc_name) = &c.super_class {
+            let scs = self.lookup_all_superclasses(sc_name)?;
+            for sc in scs {
+                sc_set.insert(sc);
+            }
+        }
+        for iface_name in &c.interfaces {
+            let scs = self.lookup_all_superclasses(iface_name)?;
+            for sc in scs {
+                sc_set.insert(sc);
+            }
+        }
+        Ok(sc_set.into_iter().collect())
     }
 
     pub fn resolve_static_field(
