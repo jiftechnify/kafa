@@ -178,10 +178,6 @@ impl MethodAccessFlags {
         self.contains(MethodAccessFlags::STATIC) && !self.contains(MethodAccessFlags::ABSTRACT)
     }
 
-    pub fn is_abstract(&self) -> bool {
-        self.contains(MethodAccessFlags::ABSTRACT)
-    }
-
     /// whether the method should have Code attribute? == neither native nor abstract
     pub fn should_have_code(&self) -> bool {
         !self.intersects(MethodAccessFlags::NATIVE | MethodAccessFlags::ABSTRACT)

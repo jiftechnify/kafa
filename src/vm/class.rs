@@ -25,7 +25,7 @@ pub struct Class {
 }
 
 impl Class {
-    pub fn from_class_file(cls_file: crate::class_file::ClassFile) -> Class {
+    pub fn from_class_file(cls_file: crate::class_file::ClassFile) -> VMResult<Class> {
         let rtcp = RunTimeConstantPool::from_class_file_cp(cls_file.constant_pool);
 
         let mut static_fields = HashMap::new();
@@ -54,23 +54,32 @@ impl Class {
                 code_attr,
             } = m.into_components();
 
-            // TODO: abstract/native methods
-            let Some(code_attr) = code_attr else {
-                unreachable!();
-            };
-
             let sig = MethodSignature {
                 name,
                 descriptor: MethodDescriptor(descriptor),
             };
+            let code_spec = {
+                if access_flags.contains(MethodAccessFlags::ABSTRACT) {
+                    MethodCodeSpec::Abstract
+                } else if access_flags.contains(MethodAccessFlags::NATIVE) {
+                    MethodCodeSpec::Native
+                } else {
+                    match code_attr {
+                        Some(ca) => MethodCodeSpec::Java {
+                            max_stack: ca.max_stack,
+                            max_locals: ca.max_locals,
+                            code: ca.code,
+                        },
+                        None => {
+                            return Err("non-abstract & non-native methods must have Code attr")?
+                        }
+                    }
+                }
+            };
             let method = Method {
                 access_flags,
                 signature: sig.clone(),
-                code_spec: Some(MethodCodeSpec {
-                    max_stack: code_attr.max_stack,
-                    max_locals: code_attr.max_locals,
-                    code: code_attr.code,
-                }),
+                code_spec,
             };
             let method = Rc::new(method);
 
@@ -81,7 +90,7 @@ impl Class {
             }
         }
 
-        Class {
+        let cls = Class {
             name: cls_file.this_class,
             const_pool: rtcp,
             access_flags: cls_file.access_flags,
@@ -92,7 +101,8 @@ impl Class {
             inst_fields_info,
             inst_methods,
             init_state: Cell::new(ClassInitState::BeforeInit),
-        }
+        };
+        Ok(cls)
     }
 
     pub fn dummy() -> Class {
@@ -169,7 +179,7 @@ impl Class {
             if iface
                 .inst_methods
                 .values()
-                .any(|m| !m.access_flags.is_abstract())
+                .any(|m| !m.access_flags.contains(MethodAccessFlags::ABSTRACT))
             {
                 res.push(iface);
             }
@@ -399,17 +409,21 @@ impl Default for MethodSignature {
 }
 
 #[derive(Clone)]
-pub struct MethodCodeSpec {
-    pub max_stack: u16,
-    pub max_locals: u16,
-    pub code: Vec<u8>,
+pub enum MethodCodeSpec {
+    Java {
+        max_stack: u16,
+        max_locals: u16,
+        code: Vec<u8>,
+    },
+    Native,
+    Abstract,
 }
 
 #[derive(Clone)]
 pub struct Method {
     pub access_flags: MethodAccessFlags,
     pub signature: MethodSignature,
-    pub code_spec: Option<MethodCodeSpec>,
+    pub code_spec: MethodCodeSpec,
 }
 
 impl Method {

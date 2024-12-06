@@ -65,7 +65,7 @@ impl ClassLoader {
         match File::open(cls_file_path) {
             Ok(f) => {
                 let cls_file = ClassFile::parse(f)?;
-                Ok(Some(Class::from_class_file(cls_file)))
+                Ok(Some(Class::from_class_file(cls_file)?))
             }
             Err(e) => {
                 if e.kind() == ErrorKind::NotFound {
@@ -85,7 +85,7 @@ impl ClassLoader {
         match zf {
             Ok(f) => {
                 let cls_file = ClassFile::parse(f)?;
-                Ok(Some(Class::from_class_file(cls_file)))
+                Ok(Some(Class::from_class_file(cls_file)?))
             }
             Err(ZipError::FileNotFound) => Ok(None),
             Err(e) => return Err(e)?,

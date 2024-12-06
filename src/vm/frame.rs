@@ -17,13 +17,13 @@ pub struct Frame {
 
 impl Frame {
     pub fn new(class: Rc<Class>, method: Rc<Method>) -> Frame {
-        let Some(MethodCodeSpec {
+        let MethodCodeSpec::Java {
             max_stack,
             max_locals,
             code,
-        }) = &method.code_spec
+        } = &method.code_spec
         else {
-            unreachable!("method to be executed on JVM frame must have code spec");
+            unreachable!("method doesn't have code to be executed on JVM frame");
         };
         let code_reader = ByteSeq::new(code.as_slice()).unwrap();
 
