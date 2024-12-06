@@ -1375,7 +1375,7 @@ fn instr_invokestatic(
 
     // lookup method to be called
     let sig = MethodSignature::new(&meth_name, &desc);
-    let (cls, meth) = meth_area.lookup_static_method(&cls_name, &sig)?;
+    let (cls, meth) = meth_area.resolve_static_method(&cls_name, &sig)?;
     let num_args = meth.num_args();
 
     // method call

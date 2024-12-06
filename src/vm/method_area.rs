@@ -117,16 +117,40 @@ impl MethodArea {
         Ok(cls.lookup_static_field(name))
     }
 
-    pub fn lookup_static_method(
+    pub fn resolve_static_method(
         &mut self,
         class_name: &str,
         sig: &MethodSignature,
     ) -> Result<(Rc<Class>, Rc<Method>), Box<dyn std::error::Error>> {
-        self.resolve_class(class_name).and_then(|cls| {
-            cls.lookup_static_method(sig)
-                .map(|meth| (cls, meth))
-                .ok_or_else(|| "static method '{class_name}.{sig}' not found".into())
-        })
+        // the symbolic reference to C given by the method reference is first resolved.
+        let cls = self.resolve_class(class_name)?;
+
+        // static interface method resolution (a portion of JVM spec 5.4.3.4.)
+        // static interface method is never inherited, so it's enough.
+        if cls.access_flags.is_interface() {
+            return cls
+                .lookup_static_method(sig)
+                .map(|meth| (cls.clone(), meth))
+                .ok_or("static method '{class_name}.{sig}' not found".into());
+        }
+
+        // static method resolution (JVM spec 5.4.3.3.)
+        // static interface method is never inherited, so no need to search superinterfaces.
+
+        // 2. (Otherwise,) if C declares a method with the name and descriptor specified by the method reference, method lookup succeeds.
+        if let Some(cm) = cls
+            .lookup_static_method(sig)
+            .map(|meth| (cls.clone(), meth))
+        {
+            return Ok(cm);
+        }
+        // Otherwise, if C has a superclass, step 2 of method resolution is recursively invoked on the direct superclass of C.
+        if let Some(sc_name) = &cls.super_class {
+            if let Ok(cm) = self.resolve_static_method(sc_name, sig) {
+                return Ok(cm);
+            }
+        }
+        Err("static method '{class_name}.{sig}' not found")?
     }
 
     pub fn lookup_instance_method(
